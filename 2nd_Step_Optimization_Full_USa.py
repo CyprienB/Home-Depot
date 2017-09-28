@@ -14,7 +14,7 @@ import pulp
 
 print("Open Worksheet")
 start_time = time.clock()
-wb = xl.load_workbook("Excel Files\File_modified.xlsx")
+wb = xl.load_workbook("C:\HomeDepot_Excel_Files\File_modified.xlsx")
 
 # Sheet with DA info
 wda = wb["DA_List"]
@@ -52,7 +52,7 @@ for r in range(numberZip):
 
 
 # Get pricing info
-Pricing=get_lm_pricing('Excel Files/Last_Mile_Pricing.xlsx','Sheet1')
+Pricing=get_lm_pricing('C:\HomeDepot_Excel_Files\Last_Mile_Pricing.xlsx','Sheet1')
 
 # Get arc max range {State : Max range}
 wrange = wb['Zip_Range']
@@ -180,7 +180,7 @@ print(end_time-start_time)
 
 print("Save File")
 start_time = time.clock()
-wb.save("Excel Files\Optimized.xlsx")
+wb.save("C:\HomeDepot_Excel_Files\Optimized.xlsx")
 end_time = time.clock()
 print(end_time-start_time)
 

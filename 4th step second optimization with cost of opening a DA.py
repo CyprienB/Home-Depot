@@ -15,7 +15,7 @@ cost_da = 100*365/12
 
 print("Open Worksheet")
 start_time = time.clock()
-wb = xl.load_workbook("Excel Files\File_modified_2.xlsx")
+wb = xl.load_workbook("C:\HomeDepot_Excel_Files\File_modified_2.xlsx")
 w_opti = wb['Optimization_Results']
 #Create list of useful DA zip code
 useful_DA_nb = instance(w_opti,2,3)
@@ -69,7 +69,7 @@ print(end_time-start_time)
 
 
 # Get pricing info
-Pricing=get_lm_pricing('Excel Files/Last_Mile_Pricing.xlsx','Sheet1')
+Pricing=get_lm_pricing('C:\HomeDepot_Excel_Files\Last_Mile_Pricing.xlsx','Sheet1')
 
 
 # Get arc max range {State : Max range}
@@ -211,7 +211,7 @@ print(end_time-start_time)
 
 print("Save File")
 start_time = time.clock()
-wb.save("Excel Files\Optimized_2.xlsx")
+wb.save("C:\HomeDepot_Excel_Files\Optimized_2.xlsx")
 end_time = time.clock()
 print(end_time-start_time)
 

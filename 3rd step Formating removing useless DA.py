@@ -9,7 +9,7 @@ Created on Wed Sep  6 20:59:49 2017
 import openpyxl as xl
 from Procedures import neig_states, cell, instance, compute_distance
 # Open Worksheet
-wb = xl.load_workbook('Excel Files\Optimized.xlsx')
+wb = xl.load_workbook('C:\HomeDepot_Excel_Files\Optimized.xlsx')
 # open Sheets and create Distances sheet
 w_neig = wb['List_of_Neighboring_States']
 w_da = wb['DA_List']
@@ -84,8 +84,8 @@ for state in DA_dict.keys():
 
 # Save file
 print ("save file")
-wb.save('Excel Files\File_modified_2.xlsx')
+wb.save('C:\HomeDepot_Excel_Files\File_modified_2.xlsx')
 
 #Compute distances
 print("Compute Distances")
-compute_distance('Excel Files\File_modified_2.xlsx','Distances',1,2,3)
+compute_distance('C:\HomeDepot_Excel_Files\File_modified_2.xlsx','Distances',1,2,3)
