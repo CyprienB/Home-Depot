@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sat Aug 12 13:06:05 2017
+Created on Sat Aug 12 13:06:05 2017 - Steven
 This file find combination of DA-Zipcode we need to have to solve the optimization model
 and then compute the crow fly distances. Test for Github for testing purpose
 @author: Bastide Cyprien
