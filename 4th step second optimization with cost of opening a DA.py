@@ -2,7 +2,7 @@
 """
 Created on Wed Sep  6 21:33:55 2017
 
-@author: Cyprien
+@author: Cyprien Bastide
 """
 
 # This is the optimization file
