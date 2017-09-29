@@ -2,7 +2,7 @@
 """
 Created on Wed Sep  6 20:59:49 2017
 
-@author: Cyprien
+@author: Cyprien Le Pu
 """
 
 
