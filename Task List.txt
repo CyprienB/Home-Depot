@@ -1,0 +1,17 @@
+Things to do:
+1. Change excel file (file modified - Distances tab to csv file)
+2. Clean excel file - make change in python. Use code from line 24 - 27 from 3rd step python code
+3. Modify step 3
+4. Merge all python files into 1 file
+5. 
+
+
+Tool Computing Steps:
+1. Comput distances for non-zero volume postal codes to DAs
+2. Last Mile Optimization 
+3. Recompute new distances without usless DAs using HomeDepot distance calculator (excel built-in tool) - pause python 
+4. Full Optimization (Last Mile + Line haul)
+5. Compute distances for 0 volume postal codes with DAs used from step 4
+6. Last mile optimization for 0 volum postal codes with DAs from step 4
+7. Further modification base on user inputs - may use cost analysis methods
+
