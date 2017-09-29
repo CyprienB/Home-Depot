@@ -1,9 +1,8 @@
 Things to do:
 1. Change excel file (file modified - Distances tab to csv file)
-2. Clean excel file - make change in python. Use code from line 24 - 27 from 3rd step python code
-3. Modify step 3
-4. Merge all python files into 1 file
-5. 
+2. Clean excel file (file modified DA - State tab) - make change in python. Use code from line 24 - 27 from 3rd step python code
+3. Modify step 3 from 'Tool Computing Steps' below
+4. Merge all python files into 1 file and call other files using exec function
 
 
 Tool Computing Steps:
