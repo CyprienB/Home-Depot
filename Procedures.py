@@ -182,7 +182,7 @@ def compute_distance(Workbook, Sheet, column_origin, column_destination, column_
     wb = xl.load_workbook(Workbook)
     wsdist = wb[Sheet]
     print('Open Database')
-    wdata = xl.load_workbook('Excel Files/Zip_latlong.xlsx')
+    wdata = xl.load_workbook('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx')
     wslatlong = wdata['Zip']
     
     linelatlong = instance(wslatlong)
@@ -219,5 +219,5 @@ def compute_distance(Workbook, Sheet, column_origin, column_destination, column_
             wslatlong.cell(row = c+2,column = 3).value = Zip_lat_long[r][1]
             c+=1
             print('Updating Database ',c*100/len(ZipList),'%')
-        wdata.save('Excel Files/Zip_latlong.xlsx')
+        wdata.save('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx')
         print('Database updated')
