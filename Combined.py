@@ -10,8 +10,8 @@ This is an optimization of the Home Depot .com Delivery network, with objective 
 
 #Import the differents Modules that are going to be used in this file
 import openpyxl as xl
-from Procedures import neig_states, cell, instance, compute_distance, correct_zip
-from progress.bar import IncrementalBar
+from Procedures import neig_states, cell, instance, compute_distance2, correct_zip
+from progress.bar import IncrementalBar as Bar
 
 
 # Open Worksheet that contains list of DA, List of Zip code with Volume, Pricing spreadsheet,...
@@ -97,11 +97,46 @@ for state in State_Da_dict.keys():
             if volume != 0:
                 combination.append([da,zipcode])
                 
+# Import Database of Zipcode Latitude and Longitude
+print('Open Database')
+wdata = xl.load_workbook('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx')
+wslatlong = wdata['Zip']
+# Collect Data and put them into dictionnary {Zip : (lat,long)}
+linelatlong = instance(wslatlong)
+Zip_lat_long = {}
+bar = Bar("Importing Data", max = linelatlong)
+for r in range(linelatlong):
+    zipcode = correct_zip(str(cell(wslatlong,r+2,1)))
+    lat = cell(wslatlong,r+2,2)
+    long = cell(wslatlong,r+2,3)
+    Zip_lat_long[zipcode] = (lat,long)
+    bar.next()
+bar.finish()
 
-# Save file
-print ("save file")
-wb.save('C:\HomeDepot_Excel_Files\File_modified.xlsx')
+# Compute distances for each combination
+nb_distances = len(combination)
+a = 0
+bar = Bar("Computing Distances", max = nb_distances)
+for i in range(nb_distances):
+    da = combination[i][0]
+    zipcode = combination[i][1] 
+    distance, Zip_lat_long, b = compute_distance2(da, zipcode, Zip_lat_long)
+    combination[i].append(distance)
+    if b == 1 :
+        a += 1
+    bar.next()
+bar.finish()
 
-#Compute distances
-print("Compute Distances")
-compute_distance('C:\HomeDepot_Excel_Files\File_modified.xlsx','Distances',1,2,3)
+# Update if a different then 0
+if a != 0:
+    print("Update Database")
+    ZipList = Zip_lat_long.keys()
+    c = 0
+    for r in ZipList:
+        wslatlong.cell(row = c+2,column = 1).value = r
+        wslatlong.cell(row = c+2,column = 2).value = Zip_lat_long[r][0]
+        wslatlong.cell(row = c+2,column = 3).value = Zip_lat_long[r][1]
+        c+=1
+    wdata.save('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx')
+    print('Database updated')
+
