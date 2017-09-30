@@ -222,7 +222,27 @@ def compute_distance(Workbook, Sheet, column_origin, column_destination, column_
         wdata.save('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx')
         print('Database updated')
         
+def compute_distance2(zip1,zip2,Dict_lat_long):
+    from geopy.distance import vincenty
+    from Procedures import geocode2    
+#   a serve to know if zipcode not in database appears and will
+    try:
+        latlong1 = Dict_lat_long[zip1]
+    except KeyError:
+        Dict_lat_long[zip1] = geocode2(zip1)[2]
+        latlong1 = Dict_lat_long[zip1]
         
+    try:
+        latlong2 = Dict_lat_long[zip2]
+    except KeyError:
+        Dict_lat_long[zip2] = geocode2(zip2)[2]
+        latlong2 = Dict_lat_long[zip2]    
+        
+    distance = vincenty(latlong1,latlong2).miles
+    
+    return distance, Dict_lat_long
+
+          
 # This function will return a 5 digit postal code by adding 0 in front if the input is less than 5
 def correct_zip(str_Zip):
     if len(str_Zip) == 4:
