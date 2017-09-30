@@ -7,7 +7,7 @@ and then compute the crow fly distances. Test for Github for testing purpose
 """
 
 import openpyxl as xl
-from Procedures import neig_states, cell, instance, compute_distance
+from Procedures import neig_states, cell, instance, compute_distance, correct_zip
 # Open Worksheet
 wb = xl.load_workbook('C:\HomeDepot_Excel_Files\Standard_File.xlsx')
 # open Sheets and create Distances sheet

@@ -221,3 +221,15 @@ def compute_distance(Workbook, Sheet, column_origin, column_destination, column_
             print('Updating Database ',c*100/len(ZipList),'%')
         wdata.save('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx')
         print('Database updated')
+        
+        
+# This function will return a 5 digit postal code by adding 0 in front if the input is less than 5
+def correct_zip(str_Zip):
+    if len(str_Zip) == 4:
+        zipcode = "0"+str_Zip
+    elif len(str_Zip) == 3:
+        zipcode = "00"+str_Zip
+    else :
+        zipcode = str_Zip
+    return zipcode
+    
