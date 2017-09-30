@@ -223,6 +223,7 @@ def compute_distance(Workbook, Sheet, column_origin, column_destination, column_
         print('Database updated')
         
 def compute_distance2(zip1,zip2,Dict_lat_long):
+    b = 0
     from geopy.distance import vincenty
     from Procedures import geocode2    
 #   a serve to know if zipcode not in database appears and will
@@ -231,16 +232,18 @@ def compute_distance2(zip1,zip2,Dict_lat_long):
     except KeyError:
         Dict_lat_long[zip1] = geocode2(zip1)[2]
         latlong1 = Dict_lat_long[zip1]
+        b=1
         
     try:
         latlong2 = Dict_lat_long[zip2]
     except KeyError:
         Dict_lat_long[zip2] = geocode2(zip2)[2]
         latlong2 = Dict_lat_long[zip2]    
+        b=1
         
     distance = vincenty(latlong1,latlong2).miles
     
-    return distance, Dict_lat_long
+    return distance, Dict_lat_long ,b
 
           
 # This function will return a 5 digit postal code by adding 0 in front if the input is less than 5
