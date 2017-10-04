@@ -3,10 +3,11 @@ Things to do:
 2. Clean excel file (file modified DA - State tab) - make change in python. Use code from line 24 - 27 from 3rd step python code
 3. Modify step 3 from 'Tool Computing Steps' below
 4. Merge all python files into 1 file and call other files using exec function
+5. Regression on Line Haul Pricing
 
 
 Tool Computing Steps:
-1. Comput distances for non-zero volume postal codes to DAs
+1. Compute distances for non-zero volume postal codes to DAs
 2. Last Mile Optimization 
 3. Recompute new distances without usless DAs using HomeDepot distance calculator (excel built-in tool) - pause python 
 4. Full Optimization (Last Mile + Line haul)
