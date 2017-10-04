@@ -9,9 +9,17 @@ This is an optimization of the Home Depot .com Delivery network, with objective 
 
 
 #Import the differents Modules that are going to be used in this file
+
+#   This Module is used to open excel files
 import openpyxl as xl
+# Neig_states return the neighboring state of the input state
+# cell is an easier way to call cell inan excel file
+# instance return the number of lines in an excel spreadsheet
+# Compute distance2 compute the distances from 2 zip code and the lat long database
+# Correct zip add 0 in front of postal codes that are not 5 digits long
 from Procedures import neig_states, cell, instance, compute_distance2, correct_zip
-from progress.bar import IncrementalBar as Bar
+#tqdm is used to create progress bar, however, if computation is too fast it might cause bugs
+from tqdm import tqdm
 
 
 # Open Worksheet that contains list of DA, List of Zip code with Volume, Pricing spreadsheet,...
@@ -104,30 +112,27 @@ wslatlong = wdata['Zip']
 # Collect Data and put them into dictionnary {Zip : (lat,long)}
 linelatlong = instance(wslatlong)
 Zip_lat_long = {}
-bar = Bar("Importing Data", max = linelatlong)
+
+print("Collect Data")
 for r in range(linelatlong):
     zipcode = correct_zip(str(cell(wslatlong,r+2,1)))
     lat = cell(wslatlong,r+2,2)
     long = cell(wslatlong,r+2,3)
     Zip_lat_long[zipcode] = (lat,long)
-    bar.next()
-bar.finish()
 
 # Compute distances for each combination
 nb_distances = len(combination)
 a = 0
-bar = Bar("Computing Distances", max = nb_distances)
-for i in range(nb_distances):
+print("Compute distances")
+for i in tqdm(range(nb_distances)):
     da = combination[i][0]
     zipcode = combination[i][1] 
     distance, Zip_lat_long, b = compute_distance2(da, zipcode, Zip_lat_long)
     combination[i].append(distance)
     if b == 1 :
         a += 1
-    bar.next()
-bar.finish()
 
-# Update if a different then 0
+# Update if new zipcodes have been added
 if a != 0:
     print("Update Database")
     ZipList = Zip_lat_long.keys()
