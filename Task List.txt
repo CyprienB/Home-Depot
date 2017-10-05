@@ -1,8 +1,8 @@
 Things to do:
-1. Change excel file (file modified - Distances tab to csv file)
-2. Clean excel file (file modified DA - State tab) - make change in python. Use code from line 24 - 27 from 3rd step python code
+1. Change excel file (file modified - Distances tab to csv file) X For now we don't save the distances, maybe create a distance database in the future
+2. Clean excel file (file modified DA - State tab) - make change in python. Use code from line 24 - 27 from 3rd step python code X Done, when uploading dictionnaries we remove duplicates
 3. Modify step 3 from 'Tool Computing Steps' below
-4. Merge all python files into 1 file and call other files using exec function
+4. Merge all python files into 1 file and call other files using exec function X Work in progress, so far up to step 2 has been done, Next step is creating list of useful Da based on optimization results and run full scale optimization
 5. Regression on Line Haul Pricing
 
 
