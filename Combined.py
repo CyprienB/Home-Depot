@@ -94,7 +94,7 @@ for r in range(n_zip):
         State_Zip_dict[state]=[]
         State_Zip_dict[state].append((zipcode, volume))
         
-#Create Dictionnary for Da { Zip:(Zip, State, [Carrier])}
+#Create Dictionnary for Da { Zip:(Zip, State, [Carrier])} will be useful o compute distances
 
 DA_ZipCode_Dict = {}
 for r in range(n_da):
@@ -106,6 +106,16 @@ for r in range(n_da):
     except KeyError:
         DA_ZipCode_Dict[zipcode] = {'Zip':zipcode, 'State':state, 'Carrier':[carrier]}
        
+# Other dictionnary for Da, { Zip + Carrier : (Zip, State, Carrier)}
+
+DAC_ZipCode_Dict = {}
+for r in range(n_da):
+    zipcode = correct_zip(str(cell(w_da,r+2,2)))
+    carrier = cell(w_da, r+2, 4)
+    state = cell(w_da, r+2, 3)
+    DAC_ZipCode_Dict[zipcode+' '+ carrier] = {'Zip':zipcode, 'State':state, 'Carrier':carrier}
+
+
 #Create Dictionnary for Zipcode (Zip, Volume ,State)
 ZipCode_Dict={}
 for r in range(n_zip):
@@ -280,30 +290,47 @@ w_result = xl.Workbook()
 wresult = w_result.create_sheet('Optimization Results')
 # export results on excel
 
-print("Exporting Results")
+#print("Exporting Results")
+#
+#wresult.cell(row=1,column=1).value= "ZipCode"
+#wresult.cell(row=1,column=2).value= "Carrier"
+#wresult.cell(row=1,column=3).value= "DaZipCode"
+#wresult.cell(row=1,column=4).value= 'DA and Carrier'
+#wresult.cell(row=1,column=5).value= 'Volume'
+#wresult.cell(row=1,column=6).value= 'Unit Cost'
+## Print Results on excel
+#r=2
+#for pc in Arcs.keys():
+#    for da in Arcs[pc].keys():
+#        if Arcs[pc][da]['variable'].varValue !=0:
+#            wresult.cell(row=r,column=1).value= pc
+#            wresult.cell(row=r,column=2).value= da[6:]
+#            wresult.cell(row=r,column=3).value= da[:5]
+#            wresult.cell(row=r,column=4).value= da
+#            wresult.cell(row=r,column=5).value= ZipCode_Dict[pc]['Volume']            
+#            wresult.cell(row=r,column=6).value= Arcs[pc][da]['lm_cost']
+#            r+=1
+#
+#
+#print("Save File")
+#
+#w_result.save("C:\HomeDepot_Excel_Files\Optimized.xlsx")
 
-wresult.cell(row=1,column=1).value= "ZipCode"
-wresult.cell(row=1,column=2).value= "Carrier"
-wresult.cell(row=1,column=3).value= "DaZipCode"
-wresult.cell(row=1,column=4).value= 'DA and Carrier'
-wresult.cell(row=1,column=5).value= 'Volume'
-wresult.cell(row=1,column=6).value= 'Unit Cost'
-# Print Results on excel
-r=2
+# Return List of useful DA
+Useful_Da = []
 for pc in Arcs.keys():
     for da in Arcs[pc].keys():
-        if Arcs[pc][da]['variable'].varValue !=0:
-            wresult.cell(row=r,column=1).value= pc
-            wresult.cell(row=r,column=2).value= da[6:]
-            wresult.cell(row=r,column=3).value= da[:5]
-            wresult.cell(row=r,column=4).value= da
-            wresult.cell(row=r,column=5).value= ZipCode_Dict[pc]['Volume']            
-            wresult.cell(row=r,column=6).value= Arcs[pc][da]['lm_cost']
-            r+=1
+        if Arcs[pc][da]['variable'].varValue != 0:
+            Useful_Da = list(set().union([da],Useful_Da))
+            
+"""
+###############################################################
+###############################################################
 
+This part is the second optimization model (includes last mile and line haul)
+and uses only DAs that are useful (based on previous optimization)
 
-print("Save File")
-
-w_result.save("C:\HomeDepot_Excel_Files\Optimized.xlsx")
-
+###############################################################
+###############################################################
+"""
 
