@@ -80,8 +80,8 @@ for state in DA_dict.keys():
 
 # Save file
 print ("save file")
-wb.save('C:\HomeDepot_Excel_Files\File_modified.xlsx')
+wb.save('C:\HomeDepot_Excel_Files\File_modified.csv')
 
 #Compute distances
 print("Compute Distances")
-compute_distance('C:\HomeDepot_Excel_Files\File_modified.xlsx','Distances',1,2,3)
+compute_distance('C:\HomeDepot_Excel_Files\File_modified.csv','Distances',1,2,3)
