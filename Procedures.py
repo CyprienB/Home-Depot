@@ -127,10 +127,7 @@ def instance(Sheet, starting_row=2, column=1):
 
     
 # Return a dictionnary of pricing (State : Carrier : ( Flat , Break, Extra))
-def get_lm_pricing(workbook, sheet):
-    import openpyxl as xl
-    Workbook = xl.load_workbook(workbook)
-    Sheet = Workbook[sheet]
+def get_lm_pricing(Sheet):
     Pricing={}
 # Get State in DIct
     nb_state = instance(Sheet,starting_row=3)
@@ -252,6 +249,9 @@ def correct_zip(str_Zip):
         zipcode = "0"+str_Zip
     elif len(str_Zip) == 3:
         zipcode = "00"+str_Zip
+    elif len(str_Zip)>5:
+        a = len(str_Zip)-5
+        zipcode = str_Zip[a:]
     else :
         zipcode = str_Zip
     return zipcode
