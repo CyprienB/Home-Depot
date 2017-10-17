@@ -256,3 +256,16 @@ def correct_zip(str_Zip):
         zipcode = str_Zip
     return zipcode
     
+# This function will return the dictionary of every State Destination with weighted origin 
+def averageOrig (ltl_price):
+    
+    destWeight = pd.DataFrame({'total' : ltl_price.groupby(['dest_state'])['sys_invc_id'].count()}).reset_index()
+    origWeight = pd.DataFrame({'subtotal' : ltl_price.groupby(['dest_state','orig_state'])['sys_invc_id'].count()}).reset_index()
+    origWeight = origWeight.merge(destWeight[['dest_state','total']], on=['dest_state'])
+    origWeight['percentage'] = round(origWeight['subtotal']/origWeight['total'],4)
+
+    percDestin = {}
+    for row in origWeight.iterrows():
+        percDestin.setdefault(row[1]['dest_state'],{}).setdefault(row[1]['orig_state'],row[1]['percentage'])
+
+    return percDestin 

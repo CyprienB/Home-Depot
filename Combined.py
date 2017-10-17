@@ -13,7 +13,7 @@ import sys
 #   This Module is used to open excel files
 import openpyxl as xl
 # Neig_states return the neighboring state of the input state
-# cell is an easier way to call cell inan excel file
+# is an easier way to call cell inan excel file
 # instance return the number of lines in an excel spreadsheet
 # Compute distance2 compute the distances from 2 zip code and the lat long database
 # Correct zip add 0 in front of postal codes that are not 5 digits long
@@ -51,6 +51,13 @@ print('Open Database')
 wdata = xl.load_workbook('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx')
 wslatlong = wdata['Zip']
 
+#Importing Excel sheet as Panda Data Frames to create Dictionary with every destination state as a Key and each Key has a nested Dictionary with the weight (percentage) of invoices coming from every origin for LTL pricing.
+print('Import Database LTL')
+wbLtl = pd.ExcelFile('C:\HomeDepot_Excel_Files\ltl_price.xlsx')
+for sheet_name in wbLtl.sheet_names:
+    ltl_price = wbLtl.parse('ltl_price', converters={'dest_zip': str,'orig_zip': str})
+   
+
 """
 ###############################################################
 ###############################################################
@@ -61,6 +68,7 @@ Multiple dictionnaries are going to be created to represent DAs and Zipcode beca
 ###############################################################
 ###############################################################
 """
+
 print ("Create all Dictionnaries")
 # Get number of DA and of Zip
 n_da= instance(w_da)
@@ -105,7 +113,8 @@ for r in range(n_da):
         DA_ZipCode_Dict[zipcode]['Carrier'] = list(set().union(DA_ZipCode_Dict[zipcode]['Carrier'],[carrier]))
     except KeyError:
         DA_ZipCode_Dict[zipcode] = {'Zip':zipcode, 'State':state, 'Carrier':[carrier]}
-       
+ 
+
 # Other dictionnary for Da, { Zip + Carrier : (Zip, State, Carrier)}
 
 DAC_ZipCode_Dict = {}
@@ -139,6 +148,10 @@ for r in range(linelatlong):
     long = cell(wslatlong,r+2,3)
     Zip_lat_long[zipcode] = (lat,long)
 
+#Create dictionary with State Destination as a Key and nested dictionary with weight by origin 
+percDestin = averageOrig(ltl_price)
+
+    
 """
 ###############################################################
 ###############################################################
@@ -322,7 +335,10 @@ for pc in Arcs.keys():
     for da in Arcs[pc].keys():
         if Arcs[pc][da]['variable'].varValue != 0:
             Useful_Da = list(set().union([da],Useful_Da))
-            
+
+           
+         
+  
 """
 ###############################################################
 ###############################################################
