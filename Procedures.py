@@ -258,6 +258,7 @@ def correct_zip(str_Zip):
     
 # This function will return the dictionary of every State Destination with weighted origin 
 def averageOrig (ltl_price):
+    import pandas as pd
     
     destWeight = pd.DataFrame({'total' : ltl_price.groupby(['dest_state'])['sys_invc_id'].count()}).reset_index()
     origWeight = pd.DataFrame({'subtotal' : ltl_price.groupby(['dest_state','orig_state'])['sys_invc_id'].count()}).reset_index()
