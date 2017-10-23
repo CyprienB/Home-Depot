@@ -4,6 +4,8 @@ Created on Mon Oct 16 14:10:42 2017
 
 @author: Steven Gao
 """
+#The purpose of this python file is to compare between the actual cost and the cost from regression model
+
 
 #Use Pandas to import excel file
 import pandas as pd
@@ -17,20 +19,12 @@ model_data = pd.read_excel('C:\HomeDepot_Excel_Files\Model_Output.xlsx')
 #Create lists to extract excel file
 invoice_id = []
 apro_cost = []
-orig_nm = []
+orig_state = []
 tot_shp_wt = []
 tot_mile_cnt = []
 
-variables_1 = []
-coeff_1 = []
-variables_1 = []
-coeff_1 = []
-variables_1 = []
-coeff_1 = []
-variables_1 = []
-coeff_1 = []
-variables_1 = []
-coeff_1 = []
+variables = []
+coeff = []
 
 predict_values = [];
 temp_variable = [];
@@ -40,7 +34,7 @@ mean_error = [];
 
 invoice_id_Data = ltl_price.iloc[0:len(ltl_price), 0]
 apro_cost_Data = ltl_price.iloc[0:len(ltl_price), 7]
-orig_nm_Data = ltl_price.iloc[0:len(ltl_price), 17]
+orig_state_Data = ltl_price.iloc[0:len(ltl_price), 17]
 tot_shp_wt_Data = ltl_price.iloc[0:len(ltl_price), 13]
 tot_mile_cnt_Data = ltl_price.iloc[0:len(ltl_price), 14]
 
@@ -51,7 +45,7 @@ coeff_Data = model_data.iloc[0:len(model_data), 1]
 for i in range(0, len(invoice_id_Data)):
     invoice_id.append(invoice_id_Data.get_value(i))
     apro_cost.append(apro_cost_Data.get_value(i))
-    orig_nm.append(orig_nm_Data.get_value(i))
+    orig_state.append(orig_state_Data.get_value(i))
     tot_shp_wt.append(tot_shp_wt_Data.get_value(i))
     tot_mile_cnt.append(tot_mile_cnt_Data.get_value(i))
 
@@ -60,6 +54,7 @@ for i in range(0, len(variables_Data)):
     variables.append(variables_Data.get_value(i))
     coeff.append(coeff_Data.get_value(i))
 
+    
 # Append predicted values using a regressional model
 for x in range(0, len(invoice_id)):
     for y in range(0, len(variables)):
@@ -67,17 +62,17 @@ for x in range(0, len(invoice_id)):
             tot_shp_wt[x] = 200
         else:
             tot_shp_wt[x] = tot_shp_wt[x]
-        if (orig_nm[x] == variables[y]):
+        if (orig_state[x] == variables[y]):
             temp_variable = coeff[y]
         else: 
             temp_variable = 0
-    predict_values.append(coeff[0] + temp_variable + tot_shp_wt[x]*0.137 +tot_mile_cnt[x]*0.046 + tot_shp_wt[x]*tot_mile_cnt[x]*0.000085)
+    predict_values.append(coeff[0] + temp_variable + tot_shp_wt[x]*coeff[4] +tot_mile_cnt[x]*coeff[5] + tot_shp_wt[x]*tot_mile_cnt[x]*coeff[6])
 
 #Calculate Percent Error
 for z in range(0, len(predict_values)):
     percent_error.append(100*(predict_values[z] - apro_cost[z])/predict_values[z])
 
-
+#
 for w in range(0, len(percent_error)):
     if (percent_error[w] >= -80):
         percent_error_filter.append(percent_error[w])
