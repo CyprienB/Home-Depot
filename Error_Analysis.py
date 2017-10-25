@@ -70,7 +70,8 @@ for x in range(0, len(invoice_id)):
 
 #Calculate Percent Error
 for z in range(0, len(predict_values)):
-    percent_error.append(100*(predict_values[z] - apro_cost[z])/predict_values[z])
+    #if (tot_shp_wt[z] <= 4999):
+        percent_error.append(100*(predict_values[z] - apro_cost[z])/predict_values[z])
 
 #
 for w in range(0, len(percent_error)):
@@ -83,7 +84,13 @@ median_error = np.median(percent_error)
 min_error = np.min(percent_error)
 max_error = np.max(percent_error)
 std_error = np.std(percent_error)
+actual_total_cost = np.sum(apro_cost)
+predicted_total_cost = np.sum(predict_values)
+total_error_percent = 100*(predicted_total_cost-actual_total_cost)/predicted_total_cost
 
+print("Actual Total Cost: " , actual_total_cost)
+print("Predicted Total Cost: " , predicted_total_cost)
+print("Total Error Percentage: " , total_error_percent)
 print ("mean error: ", mean_error)
 print("median error: ",median_error)
 print("min error: " , min_error)
@@ -91,10 +98,16 @@ print("max error: " , max_error)
 print("std error: " , std_error)
 
 #Plot
-plt.scatter(range(0,len(percent_error)),percent_error)
-plt.hist(percent_error_filter)
-plt.xlim(-80,80)
-plt.ylabel('Percent Error')
+plt.figure()
+#plt.scatter(range(0,len(percent_error)),percent_error)
+#plt.hist(percent_error_filter)
+plt.scatter(tot_shp_wt,apro_cost, color = 'k', label = 'Actual Cost')
+plt.scatter(tot_shp_wt, predict_values,color = 'r', label = 'Predicted Cost')
+plt.xlim(min(tot_shp_wt), max(tot_shp_wt)+100)
+plt.legend(loc='upper right', fontsize=20)
+#plt.ylabel('Percent Error')
+plt.suptitle('Cost vs Weight', fontsize = 20)
+plt.xlabel('Weight', fontsize = 20)
+plt.ylabel('Cost', fontsize = 20)
 plt.show()
-
 

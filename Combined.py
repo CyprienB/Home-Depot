@@ -13,7 +13,7 @@ import sys
 #   This Module is used to open excel files
 import openpyxl as xl
 # Neig_states return the neighboring state of the input state
-# is an easier way to call cell inan excel file
+# It's an easier way to call cell in an excel file
 # instance return the number of lines in an excel spreadsheet
 # Compute distance2 compute the distances from 2 zip code and the lat long database
 # Correct zip add 0 in front of postal codes that are not 5 digits long
@@ -56,26 +56,28 @@ print('Open Lat Long Database')
 wdata = xl.load_workbook('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx')
 wslatlong = wdata['Zip']
 
-#Importing Excel sheet as Panda Data Frames to create Dictionary with every destination state as a Key and each Key has a nested Dictionary with the weight (percentage) of invoices coming from every origin for LTL pricing.
+#Importing Excel sheet as Panda Data Frames to create Dictionary with every destination state
+#as a Key and each Key has a nested Dictionary with the weight (percentage) of invoices 
+#coming from every origin for LTL pricing.
 print('Import Database LTL')
 wbLtl = pd.ExcelFile('C:\HomeDepot_Excel_Files\ltl_price.xlsx')
 ltl_price = wbLtl.parse('ltl_price', converters={'dest_zip': str,'orig_zip': str})
-
 
 
 """
 ###############################################################
 ###############################################################
 
-This part create the different dictionnaries that are going to be used to solve the optimization problem
-Multiple dictionnaries are going to be created to represent DAs and Zipcode because we will need different keys to call them
+This part create different dictionnaries that are going to be used to solve the optimization problem
+Multiple dictionnaries are going to be created to represent DAs and Zipcode because we will need different 
+keys to call them
 
 ###############################################################
 ###############################################################
 """
 
 print ("Create all Dictionnaries")
-# Get number of DA and of Zip
+# Get number of DA and their Zip Codes
 n_da= instance(w_da)
 n_zip = instance(w_zip)
 linelatlong = instance(wslatlong)
