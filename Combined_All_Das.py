@@ -296,10 +296,12 @@ for pc in Arcs.keys():
             
 #        Check if distance Da_Zip is within flat distance
         if distance <  breakpoint:
-            Arcs[pc][da]['lm_cost']=flat
+            lmcost=flat
         else :
-            Arcs[pc][da]['lm_cost']=flat+ (distance - breakpoint) * extra
-            
+            lmcost=flat+ (distance - breakpoint) * extra
+        if distance > 75 : # Opportunity cost
+            lmcost += 0
+        Arcs[pc][da]['lm_cost'] = lmcost
 
 #   { Zip : {DA+Carrier :{distance, lm_cost (come in next step), var(come in two steps)}}
 print("Create Model")
@@ -323,7 +325,7 @@ for da in DAC_ZipCode_Dict.keys():
     DAC_ZipCode_Dict[da]['Weight_variable']=wvar
 
 
-# Create Objective function : minimize distance
+# Create Objective function : minimize cost
 print("Create objective and Constraint")
 def lmcost(pc,da):
     return Arcs[pc][da]['lm_cost']*ZipCode_Dict[pc]['Volume']*Arcs[pc][da]['variable']
@@ -338,7 +340,7 @@ print("Create contraint 'every zipcode is assigned to a DA'")
 for pc in tqdm(Arcs.keys()):          
     prob += pulp.lpSum([Arcs[pc][da]['variable'] for da in Arcs[pc].keys()]) == 1
 
-# Volume only if DC open, limit the max number of DA
+# Volume only if DA open, limit the max number of Zip
 for da in DAC_ZipCode_Dict.keys():
     Zip_temp = []
     for pc in Arcs.keys():
@@ -356,7 +358,7 @@ for da in DAC_ZipCode_Dict.keys():
 
 # Open a certain number of DA
 #    
-prob += pulp.lpSum([DAC_ZipCode_Dict[da]['opening_variable'] for da in DAC_ZipCode_Dict.keys() ])>= 120
+#prob += pulp.lpSum([DAC_ZipCode_Dict[da]['opening_variable'] for da in DAC_ZipCode_Dict.keys() ])>= 120
 
 # The problem is solved using PuLP's choice of Solver
 print("Solve Problem")
@@ -388,18 +390,20 @@ wresultassign.cell(row=1,column=3).value= "DaZipCode"
 wresultassign.cell(row=1,column=4).value= 'DA and Carrier'
 wresultassign.cell(row=1,column=5).value= 'Volume'
 wresultassign.cell(row=1,column=6).value= 'Unit Cost'
+wresultassign.cell(row=1,column=7).value= 'Total Cost'
+wresultassign.cell(row=1,column=8).value= 'Assignment Variable'
 # Print Results on excel
 r=2
 for pc in Arcs.keys():
     for da in Arcs[pc].keys():
-        if Arcs[pc][da]['variable'].varValue !=0:
+        if Arcs[pc][da]['variable'].varValue > 0.01 :
             wresultassign.cell(row=r,column=1).value= pc
             wresultassign.cell(row=r,column=2).value= da[6:]
             wresultassign.cell(row=r,column=3).value= da[:5]
             wresultassign.cell(row=r,column=4).value= da
             wresultassign.cell(row=r,column=5).value= ZipCode_Dict[pc]['Volume']            
             wresultassign.cell(row=r,column=6).value= Arcs[pc][da]['lm_cost']
-            wresultassign.cell(row=r,column=7).value= Arcs[pc][da]['lm_cost'] * Arcs[pc][da]['variable'].varValue
+            wresultassign.cell(row=r,column=7).value= Arcs[pc][da]['lm_cost'] * Arcs[pc][da]['variable'].varValue*ZipCode_Dict[pc]['Volume']  
             wresultassign.cell(row=r,column=8).value= Arcs[pc][da]['variable'].varValue
             r+=1
             
@@ -407,33 +411,33 @@ for pc in Arcs.keys():
 wresultda.cell(row=1,column=1).value= "Da"
 wresultda.cell(row=1,column=2).value= "Carrier"
 wresultda.cell(row=1,column=3).value= "Da zip"
-wresultda.cell(row=1,column=4).value= 'Volume'
+wresultda.cell(row=1,column=4).value= 'Volume above 200'
 wresultda.cell(row=1,column=5).value= 'lh cost'
 
 # Print Results on excel
 r=2
 
+
+Useful_Da = []
 for da in DAC_ZipCode_Dict.keys():
-    if DAC_ZipCode_Dict[da]['opening_variable'].varValue !=0:
+    if DAC_ZipCode_Dict[da]['opening_variable'].varValue == 1:
         wresultda.cell(row=r,column=1).value= da
         wresultda.cell(row=r,column=2).value= da[6:]
         wresultda.cell(row=r,column=3).value= da[:5]
+        wresultda.cell(row=r,column=4).value= DAC_ZipCode_Dict[da]["Weight_variable"].varValue
         wresultda.cell(row=r,column=5).value= (DAC_ZipCode_Dict[da]["Weight_variable"].varValue * Da_Dfc[da[:5]]['Global']['slope']+ Da_Dfc[da[:5]]['Global']['cost_opening'])*nb_trucks
-
+        wresultda.cell(row=r,column=6).value= DAC_ZipCode_Dict[da]["opening_variable"].varValue     
+        
+ # Return List of useful DA       
+        
+        Useful_Da = list(set().union([da],Useful_Da))
+        
         r+=1
 
-
+print("Number of Useful Das:", len(Useful_Da))
 
 
 print("Save File")
 
 w_result.save("C:\HomeDepot_Excel_Files\Optimized.xlsx")
-
-# Return List of useful DA
-Useful_Da = []
-for pc in Arcs.keys():
-    for da in Arcs[pc].keys():
-        if Arcs[pc][da]['variable'].varValue != 0:
-            Useful_Da = list(set().union([da],Useful_Da))
-print('Number of useful DA :', len(Useful_Da))
          
