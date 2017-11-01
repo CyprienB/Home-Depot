@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 #Extract Data from Excel
-ltl_price = pd.read_excel('C:\HomeDepot_Excel_Files\ltl_price.xlsx')
+ltl_price = pd.read_excel('C:\HomeDepot_Excel_Files\Standard_File.xlsx', sheetname='ltl_price')
 model_data = pd.read_excel('C:\HomeDepot_Excel_Files\Model_Output.xlsx')
 
 #Create lists to extract excel file
@@ -66,17 +66,13 @@ for x in range(0, len(invoice_id)):
             temp_variable = coeff[y]
         else: 
             temp_variable = 0
-    predict_values.append(coeff[0] + temp_variable + tot_shp_wt[x]*coeff[4] +tot_mile_cnt[x]*coeff[5] + tot_shp_wt[x]*tot_mile_cnt[x]*coeff[6])
+    predict_values.append(coeff[0] + temp_variable + tot_mile_cnt[x]*coeff[1] +tot_shp_wt[x]*coeff[2] + tot_shp_wt[x]*tot_mile_cnt[x]*coeff[3])
 
 #Calculate Percent Error
 for z in range(0, len(predict_values)):
     #if (tot_shp_wt[z] <= 4999):
         percent_error.append(100*(predict_values[z] - apro_cost[z])/predict_values[z])
 
-#
-for w in range(0, len(percent_error)):
-    if (percent_error[w] >= -80):
-        percent_error_filter.append(percent_error[w])
 
 #Print Result
 mean_error = np.mean(percent_error)

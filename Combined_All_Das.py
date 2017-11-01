@@ -12,6 +12,7 @@ This is an optimization of the Home Depot .com Delivery network, with objective 
 import sys
 #   This Module is used to open excel files
 import openpyxl as xl
+from statsmodels.formula.api import ols
 # Neig_states return the neighboring state of the input state
 # is an easier way to call cell inan excel file
 # instance return the number of lines in an excel spreadsheet
@@ -30,8 +31,35 @@ number_days = 30*6
 weight_treshold_ltl = 200
 nb_trucks = round(number_days*5/7)
 weight_per_volume = 100
-coefficient= {'intercept':-3.683,'weight':0.1498,'dist':0.0537,'weight_dist':0.0001,'CA':0,"GA":-8.4855,"MD":-7.5867,"OH":3.4399}
+#coefficient= {'intercept':-3.683,'weight':0.1498,'dist':0.0537,'weight_dist':0.0001,'CA':0,"GA":-8.4855,"MD":-7.5867,"OH":3.4399}
 
+#Extract Data from Excel
+ltl_price = pd.read_excel('C:\HomeDepot_Excel_Files\Standard_File.xlsx', sheetname='ltl_price')
+ltl_price.head()
+ltl_price = ltl_price[(ltl_price['tot_shp_wt'] >= 200) & (ltl_price['tot_shp_wt'] <= 4999) & (ltl_price['aprv_amt'] <=1000)]
+#ltl_price["tot_mile_cnt1"] = ltl_price["tot_mile_cnt"] - np.mean(ltl_price["tot_mile_cnt"])
+#ltl_price["tot_shp_wt1"] = ltl_price["tot_shp_wt"] - np.mean(ltl_price["tot_shp_wt"])
+ltl_price['tot_mile_wt'] = ltl_price['tot_mile_cnt'] * ltl_price['tot_shp_wt']
+#ltl_price['orig_state'] = ltl_price["orig_state"].astype('category')
+orig_state =pd.get_dummies(ltl_price['orig_state'])
+full_data = pd.concat([ltl_price,orig_state], axis=1)      
+
+# fit our model with .fit() and show results
+linehaul_model = ols('aprv_amt ~ tot_mile_cnt + tot_shp_wt + + tot_mile_wt + CA + GA + OH + MD', data=full_data).fit()
+# summarize our model
+linehaul_model_summary = linehaul_model.summary()
+print(linehaul_model_summary)
+
+#Terms & Coeff
+variables = [linehaul_model.params.index.tolist()][0]
+# Filter and Rename orig_state
+for i in range(0, len(variables)):
+    if variables[i].find("orig_state") != -1:
+        variables[i] = variables[i][-3]+variables[i][-2]
+
+coeff = [linehaul_model.params.tolist()][0]
+# Convert two lists to a dictionary
+coefficient = dict(zip(variables,coeff))
 """
 ###############################################################
 ###############################################################
@@ -58,7 +86,7 @@ wslatlong = wdata['Zip']
 
 #Importing Excel sheet as Panda Data Frames to create Dictionary with every destination state as a Key and each Key has a nested Dictionary with the weight (percentage) of invoices coming from every origin for LTL pricing.
 print('Import Database LTL')
-wbLtl = pd.ExcelFile('C:\HomeDepot_Excel_Files\ltl_price.xlsx')
+wbLtl = pd.ExcelFile('C:\HomeDepot_Excel_Files\Standard_File.xlsx')
 ltl_price = wbLtl.parse('ltl_price', converters={'dest_zip': str,'orig_zip': str})
 
 
@@ -185,9 +213,9 @@ for da in DA_ZipCode_Dict.keys():
             
             distance, Zip_lat_long, b = compute_distance2(da,dfc_zip,Zip_lat_long)
             
-            slope = coefficient["weight"]+coefficient["weight_dist"]*distance
+            slope = coefficient["tot_mile_wt"]+coefficient["tot_mile_wt"]*distance
             
-            intercept = coefficient['intercept']+coefficient[dfc_state]+coefficient['dist']*distance
+            intercept = coefficient['Intercept']+coefficient[dfc_state]+coefficient['tot_mile_cnt']*distance
             
             cost_opening = intercept + weight_treshold_ltl * slope
             
