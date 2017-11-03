@@ -27,6 +27,10 @@ import pulp
 #time allow to compute time elapsed for some taks
 import time
 import pandas as pd
+
+
+
+
 number_days = 30*6
 weight_treshold_ltl = 200
 nb_trucks = round(number_days*5/7)
@@ -46,6 +50,7 @@ ltl_price['tot_mile_wt'] = ltl_price['tot_mile_cnt'] * ltl_price['tot_shp_wt']
 
 # fit our model with .fit() and show results
 linehaul_model = ols('aprv_amt ~ tot_mile_cnt + tot_shp_wt + + tot_mile_wt', data=ltl_price).fit()
+
 # summarize our model
 linehaul_model_summary = linehaul_model.summary()
 print(linehaul_model_summary)
@@ -328,7 +333,7 @@ for pc in Arcs.keys():
         else :
             lmcost=flat+ (distance - breakpoint) * extra
         if distance > 75 : # Opportunity cost
-            lmcost += 0
+            lmcost += 25
         Arcs[pc][da]['lm_cost'] = lmcost
 
 #   { Zip : {DA+Carrier :{distance, lm_cost (come in next step), var(come in two steps)}}
@@ -391,7 +396,7 @@ for da in DAC_ZipCode_Dict.keys():
 # The problem is solved using PuLP's choice of Solver
 print("Solve Problem")
 start_time = time.clock()
-solve= pulp.solvers.GUROBI(timeLimit = 300)
+solve= pulp.solvers.GUROBI(timeLimit = 500)
 
 solve.actualSolve(prob)
 end_time = time.clock()
@@ -405,67 +410,193 @@ print("Status:", pulp.LpStatus[prob.status])
 print ("total cost", pulp.value(prob.objective))
 
 #Create workbook for results
-w_result = xl.Workbook()
-wresultassign = w_result.create_sheet('Optimization Results Assignment')
-wresultda =  w_result.create_sheet('Optimization Results DA')
+#w_result = xl.Workbook()
+#wresultassign = w_result.create_sheet('Optimization Results Assignment')
+#wresultda =  w_result.create_sheet('Optimization Results DA')
 # export results on excel
+"""
+#########################
+Put results into dataframe
+##########################
+"""
 
 print("Exporting Results")
 
-wresultassign.cell(row=1,column=1).value= "ZipCode"
-wresultassign.cell(row=1,column=2).value= "Carrier"
-wresultassign.cell(row=1,column=3).value= "DaZipCode"
-wresultassign.cell(row=1,column=4).value= 'DA and Carrier'
-wresultassign.cell(row=1,column=5).value= 'Volume'
-wresultassign.cell(row=1,column=6).value= 'Unit Cost'
-wresultassign.cell(row=1,column=7).value= 'Total Cost'
-wresultassign.cell(row=1,column=8).value= 'Assignment Variable'
-# Print Results on excel
-r=2
+column_names=["ZipCode",
+         "Carrier",
+         "DaZipCode",
+         'DA and Carrier',
+         'Volume',
+         'Unit Cost',
+         'Total Cost',
+         'Assignment Variable',
+         "distance"]
+# Print Results as DataFrame
+Assign_Results = []
 for pc in Arcs.keys():
     for da in Arcs[pc].keys():
-        if Arcs[pc][da]['variable'].varValue > 0.01 :
-            wresultassign.cell(row=r,column=1).value= pc
-            wresultassign.cell(row=r,column=2).value= da[6:]
-            wresultassign.cell(row=r,column=3).value= da[:5]
-            wresultassign.cell(row=r,column=4).value= da
-            wresultassign.cell(row=r,column=5).value= ZipCode_Dict[pc]['Volume']            
-            wresultassign.cell(row=r,column=6).value= Arcs[pc][da]['lm_cost']
-            wresultassign.cell(row=r,column=7).value= Arcs[pc][da]['lm_cost'] * Arcs[pc][da]['variable'].varValue*ZipCode_Dict[pc]['Volume']  
-            wresultassign.cell(row=r,column=8).value= Arcs[pc][da]['variable'].varValue
-            r+=1
+        if Arcs[pc][da]['variable'].varValue > 0.001 :
+            Assign_Results.append([pc,
+                                   da[6:],
+                                   da[:5],
+                                   da,
+                                   ZipCode_Dict[pc]['Volume'],
+                                   Arcs[pc][da]['lm_cost'],
+                                   Arcs[pc][da]['lm_cost'] * Arcs[pc][da]['variable'].varValue*ZipCode_Dict[pc]['Volume'],
+                                   Arcs[pc][da]['variable'].varValue,
+                                   Arcs[pc][da]['distance']])
+Assign_Results = pd.DataFrame(Assign_Results,columns = column_names)
             
             
-wresultda.cell(row=1,column=1).value= "Da"
-wresultda.cell(row=1,column=2).value= "Carrier"
-wresultda.cell(row=1,column=3).value= "Da zip"
-wresultda.cell(row=1,column=4).value= 'Volume above 200'
-wresultda.cell(row=1,column=5).value= 'lh cost'
+column_names_da= ["Da",
+              "Carrier",
+              "Da zip",
+              'Volume above 200',
+              'lh cost',
+              'Opening_variable']
 
-# Print Results on excel
-r=2
-
-
+DA_Results = []
 Useful_Da = []
 for da in DAC_ZipCode_Dict.keys():
-    if DAC_ZipCode_Dict[da]['opening_variable'].varValue == 1:
-        wresultda.cell(row=r,column=1).value= da
-        wresultda.cell(row=r,column=2).value= da[6:]
-        wresultda.cell(row=r,column=3).value= da[:5]
-        wresultda.cell(row=r,column=4).value= DAC_ZipCode_Dict[da]["Weight_variable"].varValue
-        wresultda.cell(row=r,column=5).value= (DAC_ZipCode_Dict[da]["Weight_variable"].varValue * Da_Dfc[da[:5]]['Global']['slope']+ Da_Dfc[da[:5]]['Global']['cost_opening'])*nb_trucks
-        wresultda.cell(row=r,column=6).value= DAC_ZipCode_Dict[da]["opening_variable"].varValue     
-        
+    if DAC_ZipCode_Dict[da]['opening_variable'].varValue > 0.0001:
+        DA_Results.append([da,
+                           da[6:],
+                           da[:5],
+                           DAC_ZipCode_Dict[da]["Weight_variable"].varValue,
+                           (DAC_ZipCode_Dict[da]["Weight_variable"].varValue * Da_Dfc[da[:5]]['Global']['slope']+ Da_Dfc[da[:5]]['Global']['cost_opening'])*nb_trucks,
+                            DAC_ZipCode_Dict[da]["opening_variable"].varValue])
  # Return List of useful DA       
-        
         Useful_Da = list(set().union([da],Useful_Da))
         
         r+=1
+DA_Results = pd.DataFrame(DA_Results,columns = column_names_da)
+
 
 print("Number of Useful Das:", len(Useful_Da))
 
 
-print("Save File")
-
-w_result.save("C:\HomeDepot_Excel_Files\Optimized.xlsx")
+#print("Save File")
+#
+#w_result.save("C:\HomeDepot_Excel_Files\Optimized.xlsx")
          
+
+
+"""
+#####################################
+#####################################
+Optimize 0 Volume Postal and leftovers
+#####################################
+#####################################
+"""
+#
+# Create dictionnary for the arcs
+Arcs0={}
+for i in tqdm(range(len(combination))):
+    da = combination[i][0]
+    zipcode = combination[i][1] 
+    distance = combination[i][2]
+
+    if zipcode not in Arcs.keys():
+        for carrier in DA_ZipCode_Dict[da]['Carrier']:
+            if da + " " + carrier in Useful_Da:
+                Arcs0.setdefault(zipcode,{}).setdefault(da +" "+carrier,{'distance' : distance})
+                
+                
+# Compute Costs for the arcs
+for pc in Arcs0.keys():
+    for da in Arcs0[pc].keys():
+        
+        distance = Arcs0[pc][da]['distance']        
+        da_state = DAC_ZipCode_Dict[da]['State']
+        da_carrier = DAC_ZipCode_Dict[da]['Carrier']
+        
+        try:
+            flat = Pricing[da_state][da_carrier]['Flat']
+            breakpoint = Pricing[da_state][da_carrier]['Break']
+            extra = Pricing[da_state][da_carrier]['Extra']
+        except KeyError:
+            sys.exit(("LM_Cost spreadsheet does not contain pricing info for couple state-carrier %s, %s, need to update Standard File" %(da_state,da_carrier)))
+            
+#        Check if distance Da_Zip is within flat distance
+        if distance <  breakpoint:
+            lmcost=flat
+        else :
+            lmcost=flat+ (distance - breakpoint) * extra
+        if distance > 75 : # Opportunity cost
+            lmcost += 25
+        Arcs0[pc][da]['lm_cost'] = lmcost
+
+#   { Zip : {DA+Carrier :{distance, lm_cost (come in next step), var(come in two steps)}}
+print("Create Model")
+
+# Create Model
+prob = pulp.LpProblem("Minimize LM Cost",pulp.LpMinimize)
+
+# Design arcs
+for pc in Arcs0.keys():
+    for da in Arcs0[pc].keys():
+
+        var = pulp.LpVariable("Arc_%s_%s)" % (pc,da),0,1,pulp.LpContinuous)
+        Arcs0[pc][da]['variable']=var
+            
+
+# Create Objective function : minimize cost
+print("Create objective and Constraint")
+def lmcost2(pc,da):
+    return (Arcs0[pc][da]['lm_cost']+0.01*Arcs0[pc][da]['distance'])*Arcs0[pc][da]['variable']
+
+prob += pulp.lpSum([lmcost2(pc,da) for pc in Arcs0.keys() for da in Arcs0[pc].keys()])
+
+# Create Constraint : every Zip is allocated
+print("Create contraint 'every zipcode is assigned to a DA'")
+for pc in tqdm(Arcs0.keys()):          
+    prob += pulp.lpSum([Arcs0[pc][da]['variable'] for da in Arcs0[pc].keys()]) == 1
+
+# The problem is solved using PuLP's choice of Solver
+print("Solve Problem")
+
+solve= pulp.solvers.GUROBI(timeLimit = 300)
+
+solve.actualSolve(prob)
+
+"""
+#########################
+Put results into dataframe
+##########################
+"""
+
+print("Exporting Results")
+
+column_names=["ZipCode",
+         "Carrier",
+         "DaZipCode",
+         'DA and Carrier',
+         'Volume',
+         'Unit Cost',
+         'Total Cost',
+         'Assignment Variable',
+         "distance"]
+# Print Results as DataFrame
+Assign_Results2 = []
+for pc in Arcs0.keys():
+    for da in Arcs0[pc].keys():
+        if Arcs0[pc][da]['variable'].varValue > 0.001 :
+            Assign_Results2.append([pc,
+                                   da[6:],
+                                   da[:5],
+                                   da,
+                                   ZipCode_Dict[pc]['Volume'],
+                                   Arcs0[pc][da]['lm_cost'],
+                                   Arcs0[pc][da]['lm_cost'] * Arcs0[pc][da]['variable'].varValue*ZipCode_Dict[pc]['Volume'],
+                                   Arcs0[pc][da]['variable'].varValue,
+                                   Arcs0[pc][da]['distance']])
+Assign_Results = Assign_Results.append(pd.DataFrame(Assign_Results2,columns = column_names), ignore_index=True)
+            
+print("Write Excel")
+writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Optimized_oportunity.xlsx', engine='xlsxwriter')
+Assign_Results.to_excel(writer,'AssignmentResults')
+DA_Results.to_excel(writer,'OptimizedDA')
+writer.save()
+
+
+
