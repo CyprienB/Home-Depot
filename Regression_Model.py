@@ -14,10 +14,12 @@ ltl_price = ltl_price[(ltl_price['tot_shp_wt'] >= 200) & (ltl_price['tot_shp_wt'
 ltl_price['tot_mile_wt'] = ltl_price['tot_mile_cnt'] * ltl_price['tot_shp_wt']
 #ltl_price['orig_state'] = ltl_price["orig_state"].astype('category')
 orig_state =pd.get_dummies(ltl_price['orig_state'])
-full_data = pd.concat([ltl_price,orig_state], axis=1)      
+full_data = pd.concat([ltl_price,orig_state], axis=1)    
+full_data = full_data.drop('orig_state',1)  
+
 
 # fit our model with .fit() and show results
-linehaul_model = ols('aprv_amt ~ tot_mile_cnt + tot_shp_wt + + tot_mile_wt + CA + GA + OH + MD', data=full_data).fit()
+linehaul_model = ols('aprv_amt ~ tot_mile_cnt + tot_shp_wt + tot_mile_wt', data=full_data).fit()
 # summarize our model
 linehaul_model_summary = linehaul_model.summary()
 print(linehaul_model_summary)
@@ -36,7 +38,7 @@ coefficient = dict(zip(variables,coeff))
 df = pd.DataFrame({'Variables': variables,'Coeff': coeff})
 # Fix column names
 df = df[['Variables','Coeff']]
-writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Model_Output1.xlsx', engine='xlsxwriter')
+writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Model_Output.xlsx', engine='xlsxwriter')
 df.to_excel(writer, sheet_name='Sheet1')
 writer.save()
 
