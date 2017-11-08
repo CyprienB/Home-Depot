@@ -29,8 +29,9 @@ import time
 import pandas as pd
 
 
-
-
+oportunity_threshold = 50
+oportunity_cost = 25
+min_distance_between_da = 40
 number_days = 30*6
 weight_treshold_ltl = 200
 nb_trucks = round(number_days*5/7)
@@ -123,6 +124,19 @@ for r in range(n_da):
     da_zip = correct_zip(str(cell(w_da,r+2,2))) 
 #        Remove duplicate: DA in same zipcode but different carriers
     State_Da_dict[state] = list(set().union(State_Da_dict.setdefault(state,[]),[da_zip]))
+
+
+
+# Dictionnary for DAC  {State : [Da_ZipCode + carrier]} 
+State_DAC_dict = {}
+for r in range(n_da):
+    state = cell(w_da,r+2,3) 
+    carrier = cell(w_da,r+2,4)
+    da_zip = correct_zip(str(cell(w_da,r+2,2))) 
+#        Remove duplicate: DA in same zipcode but different carriers
+    State_DAC_dict[state] = list(set().union(State_DAC_dict.setdefault(state,[]),[da_zip + " "+ carrier]))
+
+
 
 
 # Dictionnary for Zip {State : [( zipcode, volume)]}
@@ -231,7 +245,7 @@ for da in DA_ZipCode_Dict.keys():
         
         cost_opening = sum(Da_Dfc[da][dfc_state]["cost_opening"]*Da_Dfc[da][dfc_state]["percentage"] for dfc_state in Da_Dfc[da].keys())
         
-        Da_Dfc[da]['Global']={'slope' : slope, 'cost_opening' : cost_opening}
+        Da_Dfc[da]['Global']={'slope' : 0.1, 'cost_opening' : 70}
         
     except KeyError:
 #        Just assume we take the previous cost
@@ -251,6 +265,7 @@ This part create the combination DA Zipcode based on neighboring states and then
 # Go through every state, look at the Da inside, and assign them to all zip code in neighboring states
 
 combination = []
+combinationDA = []
 # Iterate through the states
 print('Creating combination Da Zipcode')
 for state in tqdm(State_Da_dict.keys()):
@@ -262,7 +277,7 @@ for state in tqdm(State_Da_dict.keys()):
     neighboring_states= neig_states(state,w_neig)
     for n_state in neighboring_states:
         zip_list += State_Zip_dict[n_state]
-# Create combination if Volume is not 0, have list of all combination [[da,zip,distance]]
+# Create combination , have list of all combination [[da,zip,distance]]
     for da in da_list:
         for pc in zip_list:
             zipcode = pc[0]
@@ -272,6 +287,28 @@ for state in tqdm(State_Da_dict.keys()):
             if b == 1 :
                 a += 1
 
+# Iterate through the states
+print('Creating combination Da_Da')
+for state in tqdm(State_DAC_dict.keys()):
+#    Create list of Da in the state
+    da_list = State_DAC_dict[state]
+
+#   Create list of Zipcode that are in neigh state
+    to_da_list = []
+    neighboring_states= neig_states(state,w_neig)
+    for n_state in neighboring_states :
+        if n_state in State_DAC_dict.keys():
+            to_da_list+= State_DAC_dict[n_state]
+# Create combination , have list of all combination [[da,zip,distance]]
+    for da in da_list:
+        for to_da in to_da_list:
+            if da != to_da:
+                zipda = da[:5]
+                zipcode = to_da[:5]
+                distance, Zip_lat_long, b = compute_distance2(zipda, zipcode, Zip_lat_long)
+                combinationDA.append([da,to_da,distance])
+                if b == 1 :
+                    a += 1
 
 # Update if new zipcodes have been added
 if a != 0:
@@ -332,8 +369,8 @@ for pc in Arcs.keys():
             lmcost=flat
         else :
             lmcost=flat+ (distance - breakpoint) * extra
-        if distance > 75 : # Opportunity cost
-            lmcost += 25
+        if distance > oportunity_threshold : # Opportunity cost
+            lmcost += oportunity_cost
         Arcs[pc][da]['lm_cost'] = lmcost
 
 #   { Zip : {DA+Carrier :{distance, lm_cost (come in next step), var(come in two steps)}}
@@ -392,6 +429,19 @@ for da in DAC_ZipCode_Dict.keys():
 # Open a certain number of DA
 #    
 #prob += pulp.lpSum([DAC_ZipCode_Dict[da]['opening_variable'] for da in DAC_ZipCode_Dict.keys() ])>= 120
+
+
+
+# Constrain distance between das
+
+for line in combinationDA:
+    da1 = line[0]
+    da2 = line[1]
+    distance = line[2]
+    carrier = da1[6:]
+    state = DAC_ZipCode_Dict[da1]['State']
+    if distance < Pricing[state][carrier]['Break']:
+        prob += DAC_ZipCode_Dict[da1]['opening_variable']+DAC_ZipCode_Dict[da2]['opening_variable'] <= 1 
 
 # The problem is solved using PuLP's choice of Solver
 print("Solve Problem")
@@ -522,8 +572,8 @@ for pc in Arcs0.keys():
             lmcost=flat
         else :
             lmcost=flat+ (distance - breakpoint) * extra
-        if distance > 75 : # Opportunity cost
-            lmcost += 25
+        if distance > oportunity_threshold : # Opportunity cost
+            lmcost += oportunity_cost
         Arcs0[pc][da]['lm_cost'] = lmcost
 
 #   { Zip : {DA+Carrier :{distance, lm_cost (come in next step), var(come in two steps)}}
