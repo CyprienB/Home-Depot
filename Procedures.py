@@ -7,8 +7,15 @@ Created on Fri Aug  4 14:42:10 2017
 
 def geocode2(postal, recursion=0):
 #    Returns the list[City,Postal Code,(lat,long)
+
+    state_db = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DC", "DE", "FL", "GA", 
+          "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", 
+          "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", 
+          "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", 
+          "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"]
+
     from geopy.exc import GeocoderTimedOut
-    from geopy.geocoders import GoogleV3
+    from geopy.geocoders import GoogleV3, Nominatim
     import time
 
 #Look Online
@@ -27,17 +34,123 @@ def geocode2(postal, recursion=0):
             return None
 
         else :
-            city = info.address
+            a = info.raw['address_components']
+            print(a)
+            for row in a:
+                    try: 
+                        b = row['short_name']
+                        print(b)
+                    except:
+                        b = 0
+                    if b in state_db:
+                        state = b
+                        print(state)
+                        break
+                    else:
+                        state = 'unknown'    
+            city = info.raw['address_components'][1]['short_name']    
             lat=info.latitude
             long=info.longitude
-            time.sleep(0.1)
+            time.sleep(0.2)
 #            state= info.state
             return [city,
                 postal,
-                (lat,long)]
-#                ,
-#                state]
+                (lat,long),
+                state]
 
+
+def geocode3(postal,lat,long, recursion=0):
+#    Returns the list[City,Postal Code,(lat,long)
+    state_db = us_state_abbrev = {
+    'Alabama': 'AL',
+    'Alaska': 'AK',
+    'Arizona': 'AZ',
+    'Arkansas': 'AR',
+    'California': 'CA',
+    'Colorado': 'CO',
+    'Connecticut': 'CT',
+    'Delaware': 'DE',
+    'Florida': 'FL',
+    'Georgia': 'GA',
+    'Hawaii': 'HI',
+    'Idaho': 'ID',
+    'Illinois': 'IL',
+    'Indiana': 'IN',
+    'Iowa': 'IA',
+    'Kansas': 'KS',
+    'Kentucky': 'KY',
+    'Louisiana': 'LA',
+    'Maine': 'ME',
+    'Maryland': 'MD',
+    'Massachusetts': 'MA',
+    'Michigan': 'MI',
+    'Minnesota': 'MN',
+    'Mississippi': 'MS',
+    'Missouri': 'MO',
+    'Montana': 'MT',
+    'Nebraska': 'NE',
+    'Nevada': 'NV',
+    'New Hampshire': 'NH',
+    'New Jersey': 'NJ',
+    'New Mexico': 'NM',
+    'New York': 'NY',
+    'North Carolina': 'NC',
+    'North Dakota': 'ND',
+    'Ohio': 'OH',
+    'Oklahoma': 'OK',
+    'Oregon': 'OR',
+    'Pennsylvania': 'PA',
+    'Rhode Island': 'RI',
+    'South Carolina': 'SC',
+    'South Dakota': 'SD',
+    'Tennessee': 'TN',
+    'Texas': 'TX',
+    'Utah': 'UT',
+    'Vermont': 'VT',
+    'Virginia': 'VA',
+    'Washington': 'WA',
+    'West Virginia': 'WV',
+    'Wisconsin': 'WI',
+    'Wyoming': 'WY',
+    'Puerto Rico': 'PR'
+}
+    from geopy.exc import GeocoderTimedOut
+    from geopy.geocoders import GoogleV3, Nominatim
+    import time
+    import uszipcode as usz
+    
+    search = usz.ZipcodeSearchEngine()
+    info = search.by_zipcode(correct_zip(str(postal)))
+    
+    if info["State"] is not None:
+        state = info["State"]
+    else:
+        state = 'None'
+#    #Look Online
+#        try:
+#            info = GoogleV3().reverse('%d, %d' %(lat, long))    
+#            
+#            #       Avoid time out error
+#        except GeocoderTimedOut as e:
+#            if recursion > 10:      # max recursions
+#                raise e
+#            time.sleep(0.1) # wait a bit
+#            # try again
+#            return geocode3(lat,long,recursion=recursion + 1)
+#        else: 
+#            # If no result found use previous info
+#            if info is None:
+#                return None
+#    
+#            else :
+#                state = []
+#                for i in info:
+#                    for string in us_state_abbrev.keys():
+#                        if i[0].find(string) != -1:
+#                            state.append(us_state_abbrev[string])
+#                state = most_common(state) 
+    print(state)
+    return state
 
 # Facilitate the openpyxl formating
 def cell(Sheet, rownb, columnnb):  
@@ -145,3 +258,25 @@ def averageOrig (ltl_price):
         percDestin.setdefault(row[1]['dest_state'],{}).setdefault(row[1]['orig_state'],row[1]['percentage'])
 
     return percDestin 
+
+
+def most_common(L):
+    
+    import itertools
+    import operator
+# get an iterable of (item, iterable) pairs
+    SL = sorted((x, i) for i, x in enumerate(L))
+# print 'SL:', SL
+    groups = itertools.groupby(SL, key=operator.itemgetter(0))
+# auxiliary function to get "quality" for an item
+    def _auxfun(g):
+        item, iterable = g
+        count = 0
+        min_index = len(L)
+        for _, where in iterable:
+            count += 1
+            min_index = min(min_index, where)
+# print 'item %r, count %r, minind %r' % (item, count, min_index)
+        return count, -min_index
+# pick the highest-count/earliest item
+    return max(groups, key=_auxfun)[0]
