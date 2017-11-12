@@ -6,96 +6,82 @@ This is an optimization of the Home Depot .com Delivery network, with objective 
 @author: Cyprien Bastide, Steven (Gao) Ming, Edson David Silva Moreno
 """
 
-
-
-#Import the differents Modules that are going to be used in this file
+# This module is used to import the different modules that will be used in this file
 import sys
-#   This Module is used to open excel files
+# This module is used to open excel files
 import openpyxl as xl
+# This module is used to perform regression analysis
 from statsmodels.formula.api import ols
-# Neig_states return the neighboring state of the input state
-# is an easier way to call cell inan excel file
-# instance return the number of lines in an excel spreadsheet
-# Compute distance2 compute the distances from 2 zip code and the lat long database
-# Correct zip add 0 in front of postal codes that are not 5 digits long
-# Get last mile pricing returns a dictionnary containing the info to compute the last mile cost
-from Procedures import neig_states, cell, instance, compute_distance2, correct_zip, get_lm_pricing, averageOrig
-#tqdm is used to create progress bar, however, if computation is too fast it might cause bugs
+# This module is used to create progress bar.
 from tqdm import tqdm
-# Pulp is the optimization engine
+# This module is the optimization engine
 import pulp
-#time allow to compute time elapsed for some taks
+# This module is used to compute time elapsed for a task
 import time
+# This module is used to convert spreadsheet into a specific dataframe for analysis
 import pandas as pd
+# neig_states: it returns the neighboring state of the input state
+# compute_distance2: it computes the distances from 2 zip code and the lat long database
+# correct_zip: it adds 0 in front of postal codes that are not 5 digits long
+# get_lm_pricing: it returns a dictionnary containing the info to compute the last mile cost
+# averageOrig: # it returns the dictionary of every State Destination with weighted origin 
+from Procedures import neig_states, compute_distance2, correct_zip, get_lm_pricing, averageOrig, geocode2
 
-
+optimization_time = 1000
 oportunity_threshold = 50
 oportunity_cost = 25
-min_distance_between_da = 40
 number_days = 30*6
 weight_treshold_ltl = 200
 nb_trucks = round(number_days*5/7)
 weight_per_volume = 100
-#coefficient= {'intercept':-3.683,'weight':0.1498,'dist':0.0537,'weight_dist':0.0001,'CA':0,"GA":-8.4855,"MD":-7.5867,"OH":3.4399}
+DA_to_DA_min_distance = 50
 
-#Extract Data from Excel
-ltl_price = pd.read_excel('C:\HomeDepot_Excel_Files\Standard_File.xlsx', sheetname='ltl_price')
-ltl_price.head()
+# Import and convert spreadsheets into panda dataframe
+wb = pd.ExcelFile('C:\HomeDepot_Excel_Files\Standard_File.xlsx')
+wd = pd.ExcelFile('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx')
+w_neig = wb.parse('List_of_Neighboring_States')
+w_da = wb.parse('DA_List')
+w_zip = wb.parse('Zip_Allocation_and_Pricing')
+w_range = wb.parse("Zip_Range")
+w_dfc = wb.parse("DFC list")
+wslatlong = wd.parse('Zip_Lat_Long')
+ltl_price = wb.parse('ltl_price', converters={'dest_zip': str,'orig_zip': str})
+
+
+
+"""
+###############
+###############
+Regression
+###############
+###############
+"""
+
+# Parse useful data for regression analysis
 ltl_price = ltl_price[(ltl_price['tot_shp_wt'] >= 200) & (ltl_price['tot_shp_wt'] <= 4999) & (ltl_price['aprv_amt'] <=1000)]
-#ltl_price["tot_mile_cnt1"] = ltl_price["tot_mile_cnt"] - np.mean(ltl_price["tot_mile_cnt"])
-#ltl_price["tot_shp_wt1"] = ltl_price["tot_shp_wt"] - np.mean(ltl_price["tot_shp_wt"])
+# Define an interaction term between distance and weight
 ltl_price['tot_mile_wt'] = ltl_price['tot_mile_cnt'] * ltl_price['tot_shp_wt']
-#ltl_price['orig_state'] = ltl_price["orig_state"].astype('category')
-#orig_state =pd.get_dummies(ltl_price['orig_state'])
-#full_data = pd.concat([ltl_price,orig_state], axis=1)      
 
-# fit our model with .fit() and show results
-
+# Fit this regression model with .fit() and show results
 linehaul_model = ols('aprv_amt ~ tot_mile_cnt + tot_shp_wt + + tot_mile_wt', data=ltl_price).fit()
 
-# summarize our model
+# Output the result of the regression model
 linehaul_model_summary = linehaul_model.summary()
 print(linehaul_model_summary)
 
-#Terms & Coeff
+# Store significant terms from the regression model
 variables = [linehaul_model.params.index.tolist()][0]
-# Filter and Rename orig_state
+
+# Filter and rename orig_state if 'orig_state' variable is used in the regression model
 for i in range(0, len(variables)):
     if variables[i].find("orig_state") != -1:
         variables[i] = variables[i][-3]+variables[i][-2]
 
+# Store coefficents to the significant terms from the regression model
 coeff = [linehaul_model.params.tolist()][0]
-# Convert two lists to a dictionary
+
+# Convert two lists (significant terms & coefficents) to a dictionary
 coefficient = dict(zip(variables,coeff))
-"""
-###############################################################
-###############################################################
-
-This part upload the information from the excel spreadsheet
-
-###############################################################
-###############################################################
-"""
-print('Import Workbook') 
-# Open Worksheet that contains list of DA, List of Zip code with Volume, Pricing spreadsheet,...
-wb = xl.load_workbook('C:\HomeDepot_Excel_Files\Standard_File.xlsx')
-# Open All Different Spreadsheet
-w_neig = wb['List_of_Neighboring_States']
-w_da = wb['DA_List']
-w_zip = wb['Zip_Allocation_and_Pricing']
-w_lm_pricing = wb["LM_Pricing"]
-w_range = wb["Zip_Range"]
-w_dfc = wb["DFC list"]
-# Import Database of Zipcode Latitude and Longitude
-print('Open Lat Long Database')
-wdata = xl.load_workbook('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx')
-wslatlong = wdata['Zip']
-
-#Importing Excel sheet as Panda Data Frames to create Dictionary with every destination state as a Key and each Key has a nested Dictionary with the weight (percentage) of invoices coming from every origin for LTL pricing.
-print('Import Database LTL')
-wbLtl = pd.ExcelFile('C:\HomeDepot_Excel_Files\Standard_File.xlsx',)
-ltl_price = wbLtl.parse('ltl_price', converters={'dest_zip': str,'orig_zip': str})
-
 
 
 """
@@ -110,103 +96,91 @@ Multiple dictionnaries are going to be created to represent DAs and Zipcode beca
 """
 
 print ("Create all Dictionnaries")
-# Get number of DA and of Zip
-n_da= instance(w_da)
-n_zip = instance(w_zip)
-linelatlong = instance(wslatlong)
-# Create dictionnaries for DA and Zip(with volume in tuple) Grouped by State, 
-# This is useful because Arcs are going to be created based on neighgboring states
-# Since distances don't depend on Carrier, if multiple DA are in the same zipcode only one will be counted
-
-# Dictionnary for DA  {State : [Da_ZipCode]} 
-State_Da_dict = {}
-for r in range(n_da):
-    state = cell(w_da,r+2,3) 
-    da_zip = correct_zip(str(cell(w_da,r+2,2))) 
-#        Remove duplicate: DA in same zipcode but different carriers
-    State_Da_dict[state] = list(set().union(State_Da_dict.setdefault(state,[]),[da_zip]))
 
 
+# Get length of DA, Zip, latlong, fullfillment centers, zip range
+n_da= len(w_da)
+n_zip = len(w_zip)
+linelatlong = len(wslatlong)
+nbdfc = len(w_dfc)
+n_range = len(w_range)
 
-# Dictionnary for DAC  {State : [Da_ZipCode + carrier]} 
-State_DAC_dict = {}
-for r in range(n_da):
-    state = cell(w_da,r+2,3) 
-    carrier = cell(w_da,r+2,4)
-    da_zip = correct_zip(str(cell(w_da,r+2,2))) 
-#        Remove duplicate: DA in same zipcode but different carriers
-    State_DAC_dict[state] = list(set().union(State_DAC_dict.setdefault(state,[]),[da_zip + " "+ carrier]))
-
-
+# Create dictionnary for the database lat long{Zip : [(lat,long),state]}
+Zip_lat_long = {}
+for r in range(linelatlong):
+    zipcode = correct_zip(str(wslatlong['ZipCode'][r]))
+    lat = wslatlong['Latitude'][r]
+    long = wslatlong['Longitude'][r]
+    state = wslatlong['State'][r]
+    Zip_lat_long[zipcode] = [(lat,long),state]
 
 
 # Dictionnary for Zip {State : [( zipcode, volume)]}
 State_Zip_dict = {}
-for r in range(n_zip):
-    state = cell(w_zip,r+2,2)
-    zipcode = correct_zip(str(cell(w_zip,r+2,1))) 
-    volume = cell(w_zip,r+2,7)
-    
-    State_Zip_dict.setdefault(state, []).append((zipcode, volume))
-
-#Create Dictionnary for Da { Zip:(Zip, State, [Carrier])} will be useful o compute distances
-
-DA_ZipCode_Dict = {}
-for r in range(n_da):
-    zipcode = correct_zip(str(cell(w_da,r+2,2)))
-    state = cell(w_da, r+2, 3)
-    carrier = cell(w_da,2+r, 4)
-    
-    DA_ZipCode_Dict.setdefault(zipcode,{'Zip':zipcode, 'State':state, 'Carrier':[carrier]}) 
-
-    DA_ZipCode_Dict[zipcode]['Carrier'] = list(set().union(DA_ZipCode_Dict[zipcode]['Carrier'],[carrier]))
-
-
-
-# Other dictionnary for Da, { Zip + Carrier : (Zip, State, Carrier)}
-
-DAC_ZipCode_Dict = {}
-for r in range(n_da):
-    zipcode = correct_zip(str(cell(w_da,r+2,2)))
-    carrier = cell(w_da, r+2, 4)
-    state = cell(w_da, r+2, 3)
-    DAC_ZipCode_Dict[zipcode+' '+ carrier] = {'Zip':zipcode, 'State':state, 'Carrier':carrier}
-
-
 #Create Dictionnary for Zipcode (Zip, Volume ,State)
 ZipCode_Dict={}
 for r in range(n_zip):
-    zipcode = correct_zip(str(cell(w_zip,2+r, 1)))
-    volume = cell(w_zip, r+2, 7)
-    state = cell(w_zip,r+2, 2)
-    ZipCode_Dict[zipcode]={'Zip':zipcode,'Volume':volume, 'State':state}         
+    zipcode = correct_zip(str(w_zip['Zip#'][r])) 
+    volume = w_zip['Volume'][r]
+    try : 
+        state = Zip_lat_long[zipcode][1]
+    except KeyError:
+        info = geocode2(zipcode)
+        Zip_lat_long[zipcode] = [info[2], info[3]]
+        state = Zip_lat_long[zipcode][1]
+    State_Zip_dict.setdefault(state, []).append((zipcode, volume))
+    ZipCode_Dict[zipcode]={'Zip':zipcode,'Volume':volume, 'State':state}
 
-# Create LM Pricing Dictionnary
-Pricing=get_lm_pricing(w_lm_pricing)
+# Dictionnary for DA  {State : [Da_ZipCode]}. This is useful because Arcs are going to be created based on neighgboring states
+State_Da_dict = {} 
+# Dictionnary for DA + carrier {State : [DA + carrier]}  
+State_DAC_dict = {}
+# Dictionnary for Da { Zip:(Zip, State, [Carrier])} will be useful to compute distances       
+DA_ZipCode_Dict = {}     
+# Other dictionnary for Da, { Zip + Carrier : (Zip, State, Carrier)}   
+DAC_ZipCode_Dict = {}       
 
-# Get arc max range Dictionnary {State : Max range}
-Range = { cell(w_range,r+2,2) : cell(w_range,r+2,3) for r in range(instance(w_range))}
+for r in range(n_da):
+    zipcode = correct_zip(str(w_da['Zip_Code'][r]))
+    carrier = w_da['Carrier'][r]
+    try :
+        state = Zip_lat_long[zipcode][1]
+    except KeyError :
+        info = geocode2(zipcode)
+        Zip_lat_long[zipcode] = [info[2], info[3]]
+    if Zip_lat_long[zipcode][1] == 'unknown':
+        sys.exit(' Prompt to Zip_Lat_Long database Zipcode %s latitude, Longitude and State or Remove DA %s %s from DA_List' % (zipcode, zipcode, carrier))
+    else : 
+        state = Zip_lat_long[zipcode][1]
+        
 
-
-# Create dictionnary for the database lat long{Zip : (lat,long)}
-Zip_lat_long = {}
-for r in range(linelatlong):
-    zipcode = correct_zip(str(cell(wslatlong,r+2,1)))
-    lat = cell(wslatlong,r+2,2)
-    long = cell(wslatlong,r+2,3)
-    Zip_lat_long[zipcode] = (lat,long)
-
-#Create dictionary with State Destination as a Key and nested dictionary with weight by origin 
-percDestin = averageOrig(ltl_price)
+    # Remove duplicate: DA in same zipcode but different carriers
+    State_Da_dict[state] = list(set().union(State_Da_dict.setdefault(state,[]),[zipcode]))
+    State_DAC_dict[state] = list(set().union(State_DAC_dict.setdefault(state,[]),[zipcode +" "+ carrier]))
+    DA_ZipCode_Dict.setdefault(zipcode,{'Zip':zipcode, 'State':state, 'Carrier':[carrier]}) 
+    DA_ZipCode_Dict[zipcode]['Carrier'] = list(set().union(DA_ZipCode_Dict[zipcode]['Carrier'],[carrier]))
+    DAC_ZipCode_Dict[zipcode+' '+ carrier] = {'Zip':zipcode, 'State':state, 'Carrier':carrier}
 
 # Create Dictionnary of DFC {State : {Name, Zip, State}}
 DFC_Dict={}
-nbdfc = instance(w_dfc)
 for r in range(nbdfc):
-    name = cell(w_dfc,r+2,1)
-    zipcode = correct_zip(str(cell(w_dfc,r+2,2)))
-    state = cell(w_dfc,r+2,3)
+    name = w_dfc['DFC'][r]
+    zipcode = correct_zip(str(w_dfc['DFC ZIP'][r]))
+    state = w_dfc['DFC State'][r]
     DFC_Dict[state]={'State':state,'Name':name,'Zipcode':zipcode}
+
+# Import LM Pricing again using openxl
+wx = xl.load_workbook('C:\HomeDepot_Excel_Files\Standard_File.xlsx')
+w_lm_pricing = wx["LM_Pricing"]
+
+# Create LM Pricing Dictionnary
+Pricing = get_lm_pricing(w_lm_pricing)
+
+# Get arc max range Dictionnary {State : Max range}
+Range = { w_range['Abreviation'][r] : w_range['Maximum distance between Zip (in state) to DA (out of state)'][r] for r in range(n_range)}
+
+# Create dictionary with State Destination as a Key and nested dictionary with weight by origin 
+percDestin = averageOrig(ltl_price)
 """
 ###############################################################
 ###############################################################
@@ -219,7 +193,7 @@ This part compute the distance between Das and DFC and the pricing based on para
 ############################################################### 
 """
 # Relation Da_Dfc is in format {da : {state_dfc : {distance, percentage from state}, global : {slope,cost_opening}}
-a = 0
+
 Da_Dfc = {}
 
 for da in DA_ZipCode_Dict.keys():
@@ -231,7 +205,7 @@ for da in DA_ZipCode_Dict.keys():
             dfc_zip = DFC_Dict[dfc_state]['Zipcode']
             percentage = percDestin[da_state][dfc_state]
             
-            distance, Zip_lat_long, b = compute_distance2(da,dfc_zip,Zip_lat_long)
+            distance, Zip_lat_long, _ = compute_distance2(da,dfc_zip,Zip_lat_long)
             
             slope = coefficient["tot_mile_wt"]+coefficient["tot_mile_wt"]*distance
             
@@ -240,8 +214,7 @@ for da in DA_ZipCode_Dict.keys():
             cost_opening = intercept + weight_treshold_ltl * slope
             
             Da_Dfc.setdefault(da,{}).setdefault(dfc_state, {"distance":distance, "percentage" : percentage,"slope": slope,"cost_opening": cost_opening})
-            if b == 1 :
-                a += 1
+
         slope = sum(Da_Dfc[da][dfc_state]["slope"]*Da_Dfc[da][dfc_state]["percentage"] for dfc_state in Da_Dfc[da].keys())
         
         cost_opening = sum(Da_Dfc[da][dfc_state]["cost_opening"]*Da_Dfc[da][dfc_state]["percentage"] for dfc_state in Da_Dfc[da].keys())
@@ -282,11 +255,9 @@ for state in tqdm(State_Da_dict.keys()):
     for da in da_list:
         for pc in zip_list:
             zipcode = pc[0]
-            volume = pc[1]
-            distance, Zip_lat_long, b = compute_distance2(da, zipcode, Zip_lat_long)
+            distance, Zip_lat_long, _ = compute_distance2(da, zipcode, Zip_lat_long)
             combination.append([da,zipcode,distance])
-            if b == 1 :
-                a += 1
+
 
 # Iterate through the states
 print('Creating combination Da_Da')
@@ -304,25 +275,33 @@ for state in tqdm(State_DAC_dict.keys()):
     for da in da_list:
         for to_da in to_da_list:
             if da != to_da:
-                zipda = da[:5]
+                zipda = da[:5]  
                 zipcode = to_da[:5]
-                distance, Zip_lat_long, b = compute_distance2(zipda, zipcode, Zip_lat_long)
+                distance, Zip_lat_long, _ = compute_distance2(zipda, zipcode, Zip_lat_long)
                 combinationDA.append([da,to_da,distance])
-                if b == 1 :
-                    a += 1
 
-# Update if new zipcodes have been added
-if a != 0:
-    print("Update Database")
-    ZipList = Zip_lat_long.keys()
-    c = 0
-    for r in ZipList:
-        wslatlong.cell(row = c+2,column = 1).value = r
-        wslatlong.cell(row = c+2,column = 2).value = Zip_lat_long[r][0]
-        wslatlong.cell(row = c+2,column = 3).value = Zip_lat_long[r][1]
-        c+=1
-    wdata.save('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx')
-    print('Database updated')
+
+# Update if new zipcodes 
+print("Update Database")
+ZipList= []
+LatList = []
+LongList = []
+StateList = []
+for zipcode in Zip_lat_long.keys():
+    latitude = Zip_lat_long[zipcode][0][0]
+    longitude = Zip_lat_long[zipcode][0][1]
+    state = Zip_lat_long[zipcode][1]
+    ZipList.append(zipcode)
+    LatList.append(latitude)
+    LongList.append(longitude)
+    StateList.append(state)
+
+Database = pd.DataFrame({'ZipCode':ZipList, 'Latitude' : LatList, 'Longitude': LongList, 'State':StateList})
+Database = Database[['ZipCode','Latitude','Longitude', 'State']]
+writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx', engine='xlsxwriter')
+Database.to_excel(writer,sheet_name = 'Zip_Lat_Long', index = False)
+writer.save()
+print('Database updated')
     
     
   
@@ -340,10 +319,8 @@ and uses all DA(based on previous optimization)
 """
 # Create dictionnary for the arcs
 Arcs={}
-for i in tqdm(range(len(combination))):
-    da = combination[i][0]
-    zipcode = combination[i][1] 
-    distance = combination[i][2]
+for da, zipcode, distance in tqdm(combination):
+
 #        Create an arc only if distance between DA and Zip is less than the Zip's state threshold in this model we only use volume above zero
     if distance< Range[ZipCode_Dict[zipcode]['State']] and ZipCode_Dict[zipcode]['Volume']>0:
         for carrier in DA_ZipCode_Dict[da]['Carrier']:
@@ -370,9 +347,12 @@ for pc in Arcs.keys():
             lmcost=flat
         else :
             lmcost=flat+ (distance - breakpoint) * extra
-        if distance > oportunity_threshold : # Opportunity cost
-            lmcost += oportunity_cost
+        if distance > oportunity_threshold : # Oportunity cost
+            lm_oport_cost = lmcost + oportunity_cost
+        else:
+            lm_oport_cost = lmcost
         Arcs[pc][da]['lm_cost'] = lmcost
+        Arcs[pc][da]['lm_oport_cost'] = lm_oport_cost
 
 #   { Zip : {DA+Carrier :{distance, lm_cost (come in next step), var(come in two steps)}}
 print("Create Model")
@@ -399,7 +379,7 @@ for da in DAC_ZipCode_Dict.keys():
 # Create Objective function : minimize cost
 print("Create objective and Constraint")
 def lmcost(pc,da):
-    return Arcs[pc][da]['lm_cost']*ZipCode_Dict[pc]['Volume']*Arcs[pc][da]['variable']
+    return (Arcs[pc][da]['lm_oport_cost']*ZipCode_Dict[pc]['Volume']+0.01*Arcs[pc][da]['distance'])*Arcs[pc][da]['variable']
 def lhcost(da):
     zip_da = da[:5]
     return Da_Dfc[zip_da]['Global']['cost_opening']*DAC_ZipCode_Dict[da]['opening_variable'] + Da_Dfc[zip_da]['Global']['slope'] * DAC_ZipCode_Dict[da]["Weight_variable"]
@@ -420,7 +400,7 @@ for da in DAC_ZipCode_Dict.keys():
         except:
 #            Whatever lline to prevent error in case da is not in zip dict
             j=10      
-    prob += pulp.lpSum(Zip_temp)-1500*DAC_ZipCode_Dict[da]['opening_variable'] <= 0
+    prob += pulp.lpSum(Zip_temp)-3000*DAC_ZipCode_Dict[da]['opening_variable'] <= 0
     
  # Constraint over the weight variable   
 for da in DAC_ZipCode_Dict.keys():
@@ -441,17 +421,19 @@ for line in combinationDA:
     distance = line[2]
     carrier = da1[6:]
     state = DAC_ZipCode_Dict[da1]['State']
-    if distance < Pricing[state][carrier]['Break']:
-        prob += DAC_ZipCode_Dict[da1]['opening_variable']+DAC_ZipCode_Dict[da2]['opening_variable'] <= 1 
-
-# The problem is solved using PuLP's choice of Solver
+#    if distance < Pricing[state][carrier]['Break']:
+#        prob += DAC_ZipCode_Dict[da1]['opening_variable']+DAC_ZipCode_Dict[da2]['opening_variable'] <= 1 
+    if distance < DA_to_DA_min_distance:
+        prob += DAC_ZipCode_Dict[da1]['opening_variable']+DAC_ZipCode_Dict[da2]['opening_variable'] <= 1
+ 
+    
+ # The problem is solved using PuLP's choice of Solver
 print("Solve Problem")
-start_time = time.clock()
-solve= pulp.solvers.GUROBI(timeLimit = 500)
+
+solve= pulp.solvers.GUROBI(timeLimit = optimization_time)
 
 solve.actualSolve(prob)
-end_time = time.clock()
-print(end_time-start_time)
+
 
 # The status of the solution is printed to the screen
 print("Status:", pulp.LpStatus[prob.status])
@@ -475,6 +457,7 @@ column_names=["ZipCode",
          'Volume',
          'Unit Cost',
          'Total Cost',
+         'Oportunity_cost',
          'Assignment Variable',
          "distance"]
 # Print Results as DataFrame
@@ -489,6 +472,7 @@ for pc in Arcs.keys():
                                    ZipCode_Dict[pc]['Volume'],
                                    Arcs[pc][da]['lm_cost'],
                                    Arcs[pc][da]['lm_cost'] * Arcs[pc][da]['variable'].varValue*ZipCode_Dict[pc]['Volume'],
+                                   Arcs[pc][da]['lm_oport_cost'],
                                    Arcs[pc][da]['variable'].varValue,
                                    Arcs[pc][da]['distance']])
 Assign_Results = pd.DataFrame(Assign_Results,columns = column_names)
@@ -568,9 +552,12 @@ for pc in Arcs0.keys():
             lmcost=flat
         else :
             lmcost=flat+ (distance - breakpoint) * extra
-        if distance > oportunity_threshold : # Opportunity cost
-            lmcost += oportunity_cost
+        if distance > oportunity_threshold : # Oportunity cost
+            lm_oport_cost = lmcost + oportunity_cost
+        else:
+            lm_oport_cost = lmcost
         Arcs0[pc][da]['lm_cost'] = lmcost
+        Arcs0[pc][da]['lm_oport_cost'] = lm_oport_cost
 
 #   { Zip : {DA+Carrier :{distance, lm_cost (come in next step), var(come in two steps)}}
 print("Create Model")
@@ -589,7 +576,7 @@ for pc in Arcs0.keys():
 # Create Objective function : minimize cost
 print("Create objective and Constraint")
 def lmcost2(pc,da):
-    return (Arcs0[pc][da]['lm_cost']+0.01*Arcs0[pc][da]['distance'])*Arcs0[pc][da]['variable']
+    return (Arcs0[pc][da]['lm_oport_cost']+0.005*Arcs0[pc][da]['distance'])*Arcs0[pc][da]['variable']
 
 prob += pulp.lpSum([lmcost2(pc,da) for pc in Arcs0.keys() for da in Arcs0[pc].keys()])
 
@@ -601,7 +588,7 @@ for pc in tqdm(Arcs0.keys()):
 # The problem is solved using PuLP's choice of Solver
 print("Solve Problem")
 
-solve= pulp.solvers.GUROBI(timeLimit = 300)
+solve= pulp.solvers.GUROBI(timeLimit = optimization_time)
 
 solve.actualSolve(prob)
 
@@ -620,6 +607,7 @@ column_names=["ZipCode",
          'Volume',
          'Unit Cost',
          'Total Cost',
+         'Oportunity_cost',
          'Assignment Variable',
          "distance"]
 # Print Results as DataFrame
@@ -634,15 +622,30 @@ for pc in Arcs0.keys():
                                    ZipCode_Dict[pc]['Volume'],
                                    Arcs0[pc][da]['lm_cost'],
                                    Arcs0[pc][da]['lm_cost'] * Arcs0[pc][da]['variable'].varValue*ZipCode_Dict[pc]['Volume'],
+                                   Arcs0[pc][da]['lm_oport_cost'],
                                    Arcs0[pc][da]['variable'].varValue,
                                    Arcs0[pc][da]['distance']])
 Assign_Results = Assign_Results.append(pd.DataFrame(Assign_Results2,columns = column_names), ignore_index=True)
             
 print("Write Excel")
-writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Optimized_oportunity.xlsx', engine='xlsxwriter')
-Assign_Results.to_excel(writer,'AssignmentResults')
-DA_Results.to_excel(writer,'OptimizedDA')
+writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Optimized_oportunity_Winkowski.xlsx', engine='xlsxwriter')
+Assign_Results.to_excel(writer,'AssignmentResults', index = False)
+DA_Results.to_excel(writer,'OptimizedDA', index = False)
 writer.save()
+
+
+"""
+##############################
+##############################
+Cost Analysis
+##############################
+##############################
+"""
+
+Optimized_LM_Cost = Assign_Results['Total Cost'].sum()
+Optimized_LH_Cost = DA_Results['lh cost'].sum()
+Total_Optimized_Cost = Optimized_LH_Cost+Optimized_LM_Cost
+
 
 
 

@@ -20,43 +20,45 @@ def geocode2(postal, recursion=0):
 
 #Look Online
     try:
-        info = GoogleV3().geocode(str(postal)+", United States of America")    
+        info = GoogleV3(timeout = 10).geocode(str(postal)+", United States of America")    
         #       Avoid time out error
     except GeocoderTimedOut as e:
         if recursion > 10:      # max recursions
-            raise e
+             return ['unknown','unknown',('unknown','unknown'),'unknown']
         time.sleep(0.1) # wait a bit
         # try again
         return geocode2(postal,recursion=recursion + 1)
-    else: 
-        # If no result found use previous info
-        if info is None:
-            return None
+    except :
+        info = None
 
-        else :
-            a = info.raw['address_components']
-            print(a)
-            for row in a:
-                    try: 
-                        b = row['short_name']
-                        print(b)
-                    except:
-                        b = 0
-                    if b in state_db:
-                        state = b
-                        print(state)
-                        break
-                    else:
-                        state = 'unknown'    
-            city = info.raw['address_components'][1]['short_name']    
-            lat=info.latitude
-            long=info.longitude
-            time.sleep(0.2)
+    # If no result found use previous info
+    if info is None:
+        return ['unknown','unknown',('unknown','unknown'),'unknown']
+
+    else :
+        a = info.raw['address_components']
+        
+        for row in a:
+                try: 
+                    b = row['short_name']
+                    
+                except:
+                    b = 0
+                if b in state_db:
+                    state = b
+                    
+                    break
+                else:
+                    state = 'unknown'    
+        city = 'city is not looked for'
+        lat=info.latitude
+        long=info.longitude
+        time.sleep(0.5)
 #            state= info.state
-            return [city,
-                postal,
-                (lat,long),
-                state]
+        return [city,
+            postal,
+            (lat,long),
+            state]
 
 
 def geocode3(postal,lat,long, recursion=0):
@@ -187,14 +189,14 @@ def get_lm_pricing(Sheet):
 
 #    Return a list of all"neighboring" states to the one in the argument 
 def neig_states(state_code, Sheet):
-    a=instance(Sheet)
+    a= len(Sheet)
     List=[state_code]
     for r in range(a):
-        if cell(Sheet,r+2,1) == state_code:
-            List.append(cell(Sheet,r+2, 2))
+        if Sheet['StateCode'][r] == state_code:
+            List.append(Sheet['NeighborStateCode'][r])
             
-        if cell(Sheet, r+2, 2) == state_code and cell(Sheet,r+2,3) == "1st":
-            List.append(cell(Sheet, r+2, 1))
+        if Sheet['NeighborStateCode'][r] == state_code and Sheet['Neighboring degree'][r] == "1st":
+            List.append(Sheet['StateCode'][r])
     return List
     
 # Return a list of STates defining The region, based on degree of neighboor 
@@ -207,26 +209,30 @@ def get_second_neig(state_code, Sheet):
         List2 = list(set().union(List2,A))
     return List2          
 
-def compute_distance2(zip1,zip2,Dict_lat_long):
+def compute_distance2(zip1,zip2,Dict_lat_long,Minkowski_coef = 1.54):
     b = 0
     from geopy.distance import vincenty
     from Procedures import geocode2    
 #   a serve to know if zipcode not in database appears and will
     try:
-        latlong1 = Dict_lat_long[zip1]
+        latlong1 = Dict_lat_long[zip1][0]
     except KeyError:
-        Dict_lat_long[zip1] = geocode2(zip1,10)[2]
-        latlong1 = Dict_lat_long[zip1]
+        info = geocode2(zip1)
+        latlong1 = info[2]
+        state = info[3]
+        Dict_lat_long[zip1] = [latlong1, state]
         b=1
         
     try:
-        latlong2 = Dict_lat_long[zip2]
+        latlong2 = Dict_lat_long[zip2][0]
     except KeyError:
-        Dict_lat_long[zip2] = geocode2(zip2,10)[2]
-        latlong2 = Dict_lat_long[zip2]    
-        b=1
+        info = geocode2(zip2)
+        latlong2 = info[2]
+        state = info[3]
+        Dict_lat_long[zip2] = [latlong2, state]
+        b = 1
         
-    distance = vincenty(latlong1,latlong2).miles
+    distance = vincenty(latlong1,latlong2).miles * Minkowski_coef
     
     return distance, Dict_lat_long ,b
 
