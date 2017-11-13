@@ -27,14 +27,14 @@ import pandas as pd
 # averageOrig: # it returns the dictionary of every State Destination with weighted origin 
 from Procedures import neig_states, compute_distance2, correct_zip, get_lm_pricing, averageOrig, geocode2
 
-optimization_time = 1000
+optimization_time = 500
 oportunity_threshold = 50
-oportunity_cost = 25
+oportunity_cost = 10
 number_days = 30*6
 weight_treshold_ltl = 200
 nb_trucks = round(number_days*5/7)
 weight_per_volume = 100
-DA_to_DA_min_distance = 50
+DA_to_DA_min_distance = 40*1.54
 
 # Import and convert spreadsheets into panda dataframe
 wb = pd.ExcelFile('C:\HomeDepot_Excel_Files\Standard_File.xlsx')
@@ -219,11 +219,11 @@ for da in DA_ZipCode_Dict.keys():
         
         cost_opening = sum(Da_Dfc[da][dfc_state]["cost_opening"]*Da_Dfc[da][dfc_state]["percentage"] for dfc_state in Da_Dfc[da].keys())
         
-        Da_Dfc[da]['Global']={'slope' : 0.1, 'cost_opening' : 70}
+        Da_Dfc[da]['Global']={'slope' : slope, 'cost_opening' : cost_opening}
         
     except KeyError:
 #        Just assume we take the previous cost
-        Da_Dfc.setdefault(da,{}).setdefault('Global',{'slope' : slope, 'cost_opening' : cost_opening, 'Warning':"This Da doesn't have real slope or cost of opening"}  )  
+        Da_Dfc.setdefault(da,{}).setdefault('Global',{'slope' : 0.1, 'cost_opening' : 70, 'Warning':"This Da doesn't have real slope or cost of opening"}  )  
 
 """
 ###############################################################
@@ -628,7 +628,7 @@ for pc in Arcs0.keys():
 Assign_Results = Assign_Results.append(pd.DataFrame(Assign_Results2,columns = column_names), ignore_index=True)
             
 print("Write Excel")
-writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Optimized_oportunity_Winkowski.xlsx', engine='xlsxwriter')
+writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Optimized_oportunity.xlsx', engine='xlsxwriter')
 Assign_Results.to_excel(writer,'AssignmentResults', index = False)
 DA_Results.to_excel(writer,'OptimizedDA', index = False)
 writer.save()
@@ -647,5 +647,100 @@ Optimized_LH_Cost = DA_Results['lh cost'].sum()
 Total_Optimized_Cost = Optimized_LH_Cost+Optimized_LM_Cost
 
 
+# Computation of LM Cost of Current Network
+New_Column = []
+for r in range(len(w_zip)):
+    zipcode = correct_zip(str(w_zip['Zip#'][r]))
+    if zipcode in Assign_Results['ZipCode'].values:  # Maybe incorrect, the objective is to use only Zipcode that are assign after optimization
+        da_zipcode = correct_zip(str(w_zip['DA ZIP'][r]))
+        carrier = w_zip['Carrier'][r]
+        state = Zip_lat_long[da_zipcode][1]
+        distance, Zip_lat_long, _ = compute_distance2(zipcode,da_zipcode,Zip_lat_long)
+        
+        if carrier in Pricing[state].keys():
+           flat = Pricing[state][carrier]['Flat']
+           breakpoint = Pricing[state][carrier]['Break']
+           extra = Pricing[state][carrier]['Extra']
+           if distance <  breakpoint:
+               lmcost=flat
+           else :
+               lmcost=flat+ (distance - breakpoint) * extra
+               
+        else : # If carrier is not in our pricing dictionnary we compute averageof all carrier present
+            costs = []
+            for carrier in Pricing[state].keys():
+                flat = Pricing[state][carrier]['Flat']
+                breakpoint = Pricing[state][carrier]['Break']
+                extra = Pricing[state][carrier]['Extra']
+                if distance <  breakpoint:
+                    lmcost=flat
+                else :
+                   lmcost=flat+ (distance - breakpoint) * extra
+                costs.append(lmcost)
+            lmcost = sum(costs)/len(costs)
+        New_Column.append(lmcost)
+    else:
+        New_Column.append(0)
+        
+w_zip['Estimated_Unit_Cost'] = New_Column
+w_zip['Estimated_LM_Cost'] = w_zip['Estimated_Unit_Cost'] * w_zip['Volume']
+w_zip['Difference'] = w_zip['Estimated_LM_Cost']- w_zip['Cost']
+Current_LM_Cost = w_zip['Estimated_LM_Cost'].sum()
+
+# Computation of LH Cost
+w_lh = w_zip.groupby(['DA ZIP','Carrier'])['Volume'].sum()
+w_lh = w_lh.reset_index()
+w_lh['Weight_per_truck'] = w_lh['Volume']*weight_per_volume/nb_trucks
+
+New_Column = []
+
+for r in range(len(w_lh)):
+    zipcode = correct_zip(str(w_lh['DA ZIP'][r]))
+    state = Zip_lat_long[zipcode][1]
+    weight = w_lh['Weight_per_truck'][r]
+    try:
+        for dfc_state in percDestin[state].keys():
+            
+            dfc_zip = DFC_Dict[dfc_state]['Zipcode']
+            percentage = percDestin[state][dfc_state]
+            
+            distance, Zip_lat_long, _ = compute_distance2(zipcode,dfc_zip,Zip_lat_long)
+            
+            slope = coefficient["tot_mile_wt"]+coefficient["tot_mile_wt"]*distance
+            
+            intercept = coefficient['Intercept']+coefficient['tot_mile_cnt']*distance
+            
+            cost_opening = intercept + weight_treshold_ltl * slope
+            
+            Da_Dfc.setdefault(zipcode,{}).setdefault(dfc_state, {"distance":distance, "percentage" : percentage,"slope": slope,"cost_opening": cost_opening})
+
+        slope = sum(Da_Dfc[zipcode][dfc_state]["slope"]*Da_Dfc[zipcode][dfc_state]["percentage"] for dfc_state in Da_Dfc[zipcode].keys())
+        
+        cost_opening = sum(Da_Dfc[zipcode][dfc_state]["cost_opening"]*Da_Dfc[zipcode][dfc_state]["percentage"] for dfc_state in Da_Dfc[zipcode].keys())
+        
+        Da_Dfc[zipcode]['Global']={'slope' : slope, 'cost_opening' : cost_opening}
+        
+    except KeyError:
+#        Just assume we take the previous cost
+        Da_Dfc.setdefault(zipcode,{}).setdefault('Global',{'slope' : 0.1, 'cost_opening' : 70, 'Warning':"This Da doesn't have real slope or cost of opening"}  )  
+    
+    if weight < weight_treshold_ltl:
+        lhcost = Da_Dfc[zipcode]['Global']['cost_opening']
+    else : 
+        lhcost = Da_Dfc[zipcode]['Global']['cost_opening'] + Da_Dfc[zipcode]['Global']['slope'] * (weight - weight_treshold_ltl) 
+    lhcost = lhcost * nb_trucks
+    
+    New_Column.append(lhcost)
+
+w_lh['LH Cost'] = New_Column
 
 
+Current_LH_Cost = w_lh['LH Cost'].sum()
+
+Current_Total_Cost = Current_LH_Cost + Current_LM_Cost
+percentage_savings = (Current_Total_Cost-Total_Optimized_Cost)/Current_Total_Cost*100
+print('Number of Das :', len(Useful_Da))
+print('Current LM Cost :', Current_LM_Cost, ', Optimized Network LM Cost :', Optimized_LM_Cost)
+print('Current LH Cost :', Current_LH_Cost, ', Optimized Network LH Cost :', Optimized_LH_Cost)
+print('Current Total Cost :', Current_Total_Cost, ', Optimized Network Total Cost :', Total_Optimized_Cost)
+print('Savings in percentage :', percentage_savings)
