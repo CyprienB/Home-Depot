@@ -27,13 +27,13 @@ import pandas as pd
 # averageOrig: # it returns the dictionary of every State Destination with weighted origin 
 from Procedures import neig_states, compute_distance2, correct_zip, get_lm_pricing, averageOrig, geocode2
 
-optimization_time = 500
+optimization_time = 1500
 oportunity_threshold = 50
 oportunity_cost = 10
 number_days = 30*6
 weight_treshold_ltl = 200
 nb_trucks = round(number_days*5/7)
-weight_per_volume = 100
+weight_per_volume = 180
 DA_to_DA_min_distance = 40*1.54
 
 # Import and convert spreadsheets into panda dataframe
@@ -744,3 +744,11 @@ print('Current LM Cost :', Current_LM_Cost, ', Optimized Network LM Cost :', Opt
 print('Current LH Cost :', Current_LH_Cost, ', Optimized Network LH Cost :', Optimized_LH_Cost)
 print('Current Total Cost :', Current_Total_Cost, ', Optimized Network Total Cost :', Total_Optimized_Cost)
 print('Savings in percentage :', percentage_savings)
+
+
+df = pd.DataFrame({'Opportunity Cost': [oportunity_cost],'Number of DAs': [len(Useful_Da)], 'Current LM Cost': [Current_LM_Cost],'Current LH Cost': [Current_LH_Cost], 'Optimized LM Cost':[Optimized_LM_Cost], 'Optimized LH Cost':[Optimized_LH_Cost],'Current Total Cost':[Current_Total_Cost], 'Total Optimized Cost':[Total_Optimized_Cost]})
+# Fix column names
+df = df[['Opportunity Cost','Number of DAs','Current LM Cost','Current LH Cost','Optimized LM Cost','Optimized LH Cost','Current Total Cost','Total Optimized Cost']]
+writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Cost_Output.xlsx', engine='xlsxwriter')
+df.to_excel(writer, sheet_name='Sheet1')
+writer.save()

@@ -209,7 +209,7 @@ def get_second_neig(state_code, Sheet):
         List2 = list(set().union(List2,A))
     return List2          
 
-def compute_distance2(zip1,zip2,Dict_lat_long,Minkowski_coef = 1.54):
+def compute_distance2(zip1,zip2,Dict_lat_long, show =0,Minkowski_coef = 1.54):
     b = 0
     from geopy.distance import vincenty
     from Procedures import geocode2    
@@ -231,9 +231,12 @@ def compute_distance2(zip1,zip2,Dict_lat_long,Minkowski_coef = 1.54):
         state = info[3]
         Dict_lat_long[zip2] = [latlong2, state]
         b = 1
-        
-    distance = vincenty(latlong1,latlong2).miles * Minkowski_coef
-    
+    if show ==1:
+        print(latlong1,latlong2)
+    if latlong1 == ('unknown','unknown') or latlong2 == ('unknown','unknown'):
+        distance = 1000
+    else:
+        distance = vincenty(latlong1,latlong2).miles * Minkowski_coef
     return distance, Dict_lat_long ,b
 
           
