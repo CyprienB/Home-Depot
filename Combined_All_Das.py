@@ -5,7 +5,7 @@ This file combine all other Python files with some improvments to avoid useless 
 This is an optimization of the Home Depot .com Delivery network, with objective function being the total cost (line haul + last Mile) 
 @author: Cyprien Bastide, Steven (Gao) Ming, Edson David Silva Moreno
 """
-
+import numpy as np
 # This module is used to import the different modules that will be used in this file
 import sys
 # This module is used to open excel files
@@ -16,8 +16,6 @@ from statsmodels.formula.api import ols
 from tqdm import tqdm
 # This module is the optimization engine
 import pulp
-# This module is used to compute time elapsed for a task
-import time
 # This module is used to convert spreadsheet into a specific dataframe for analysis
 import pandas as pd
 # neig_states: it returns the neighboring state of the input state
@@ -27,16 +25,17 @@ import pandas as pd
 # averageOrig: # it returns the dictionary of every State Destination with weighted origin 
 from Procedures import neig_states, compute_distance2, correct_zip, get_lm_pricing, averageOrig, geocode2
 
-optimization_time = 1500
-oportunity_threshold = 50
-oportunity_cost = 10
-number_days = 30*6
-weight_treshold_ltl = 200
-nb_trucks = round(number_days*5/7)
-weight_per_volume = 180
-DA_to_DA_min_distance = 40*1.54
+# Minkowski approximates crow_fly distance with road distance
+Minkowski_coef = 1.54
 
+"""
+###############
+###############
 # Import and convert spreadsheets into panda dataframe
+###############
+###############
+"""
+
 wb = pd.ExcelFile('C:\HomeDepot_Excel_Files\Standard_File.xlsx')
 wd = pd.ExcelFile('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx')
 w_neig = wb.parse('List_of_Neighboring_States')
@@ -46,7 +45,24 @@ w_range = wb.parse("Zip_Range")
 w_dfc = wb.parse("DFC list")
 wslatlong = wd.parse('Zip_Lat_Long')
 ltl_price = wb.parse('ltl_price', converters={'dest_zip': str,'orig_zip': str})
+w_param = wb.parse('Optimization_Parameters')
+w_sl = wb.parse('Service_Level')
 
+
+"""
+###############
+###############
+Assign parameters value
+###############
+###############
+"""
+min_nb_current_da = w_param['Min_Nb_Current_DAs_To_Keep']
+optimization_time = w_param['Max_Run_Time'][0]
+number_days = w_param['Nb_Days'][0]
+weight_treshold_ltl = w_param['LTL_Flat_Weight'][0]
+nb_trucks = round(w_param['Nb_Trucks_Per_Day_Per_DA'][0] * number_days)
+weight_per_volume = w_param['Avg_Order_Weight'][0]
+DA_to_DA_min_distance = w_param['Min_Dist_Btw_DA'][0]*Minkowski_coef
 
 
 """
@@ -94,6 +110,18 @@ Multiple dictionnaries are going to be created to represent DAs and Zipcode beca
 ###############################################################
 ###############################################################
 """
+
+# List of assignments we want to keep
+Assignment_Kept = []
+Current_DA= []
+for r in range(len(w_zip)):
+    zipcode = correct_zip(w_zip['Zip#'][r])
+    da = correct_zip(w_zip['DA ZIP'][r])
+    carrier = w_zip['Carrier'][r]
+    if w_zip["Keep_Assignment"][r] == 1:
+        Assignment_Kept.append([zipcode, da+' '+carrier])
+#    List of current DA
+    Current_DA = list(set().union(Current_DA,[da+" "+carrier]))
 
 print ("Create all Dictionnaries")
 
@@ -177,10 +205,11 @@ w_lm_pricing = wx["LM_Pricing"]
 Pricing = get_lm_pricing(w_lm_pricing)
 
 # Get arc max range Dictionnary {State : Max range}
-Range = { w_range['Abreviation'][r] : w_range['Maximum distance between Zip (in state) to DA (out of state)'][r] for r in range(n_range)}
+Range = { w_range['Abreviation'][r] : w_range['Max_Dist_Zip_Da'][r] * Minkowski_coef for r in range(n_range)}
 
 # Create dictionary with State Destination as a Key and nested dictionary with weight by origin 
 percDestin = averageOrig(ltl_price)
+
 """
 ###############################################################
 ###############################################################
@@ -196,35 +225,36 @@ This part compute the distance between Das and DFC and the pricing based on para
 
 Da_Dfc = {}
 
+Error_state = []
 for da in DA_ZipCode_Dict.keys():
     
     da_state = DA_ZipCode_Dict[da]["State"]
     try:
-        for dfc_state in percDestin[da_state].keys():
-            
+        for dfc_state in percDestin[da_state].keys():   
             dfc_zip = DFC_Dict[dfc_state]['Zipcode']
-            percentage = percDestin[da_state][dfc_state]
-            
-            distance, Zip_lat_long, _ = compute_distance2(da,dfc_zip,Zip_lat_long)
-            
-            slope = coefficient["tot_mile_wt"]+coefficient["tot_mile_wt"]*distance
-            
-            intercept = coefficient['Intercept']+coefficient['tot_mile_cnt']*distance
-            
-            cost_opening = intercept + weight_treshold_ltl * slope
-            
+            percentage = percDestin[da_state][dfc_state]            
+            distance, Zip_lat_long, _ = compute_distance2(da,dfc_zip,Zip_lat_long)            
+            slope = coefficient["tot_mile_wt"]+coefficient["tot_mile_wt"]*distance            
+            intercept = coefficient['Intercept']+coefficient['tot_mile_cnt']*distance            
+            cost_opening = intercept + weight_treshold_ltl * slope            
             Da_Dfc.setdefault(da,{}).setdefault(dfc_state, {"distance":distance, "percentage" : percentage,"slope": slope,"cost_opening": cost_opening})
-
-        slope = sum(Da_Dfc[da][dfc_state]["slope"]*Da_Dfc[da][dfc_state]["percentage"] for dfc_state in Da_Dfc[da].keys())
-        
-        cost_opening = sum(Da_Dfc[da][dfc_state]["cost_opening"]*Da_Dfc[da][dfc_state]["percentage"] for dfc_state in Da_Dfc[da].keys())
-        
-        Da_Dfc[da]['Global']={'slope' : slope, 'cost_opening' : cost_opening}
-        
+        slope = sum(Da_Dfc[da][dfc_state]["slope"]*Da_Dfc[da][dfc_state]["percentage"] for dfc_state in Da_Dfc[da].keys())        
+        cost_opening = sum(Da_Dfc[da][dfc_state]["cost_opening"]*Da_Dfc[da][dfc_state]["percentage"] for dfc_state in Da_Dfc[da].keys())        
+        Da_Dfc[da]['Global']={'slope' : slope, 'cost_opening' : cost_opening}        
     except KeyError:
-#        Just assume we take the previous cost
-        Da_Dfc.setdefault(da,{}).setdefault('Global',{'slope' : 0.1, 'cost_opening' : 70, 'Warning':"This Da doesn't have real slope or cost of opening"}  )  
+        Error_state = list(set().union(Error_state,[da_state]))
 
+for da_state in Error_state:
+    neigh_states = neig_states(da_state, w_neig)
+    neigh_das = []
+    for state in neigh_states: 
+        if state not in Error_state : 
+            neigh_das += State_Da_dict[state]
+    for da in State_Da_dict[da_state]:
+        Da_Dfc.setdefault(da,{}).setdefault('Global', {})
+        slope = np.mean([Da_Dfc[nda]['Global']['slope'] for nda in neigh_das])
+        cost_opening = np.mean([Da_Dfc[nda]['Global']['cost_opening'] for nda in neigh_das])
+        Da_Dfc[da]['Global']={'slope' : slope, 'cost_opening' : cost_opening}
 """
 ###############################################################
 ###############################################################
@@ -256,7 +286,7 @@ for state in tqdm(State_Da_dict.keys()):
         for pc in zip_list:
             zipcode = pc[0]
             distance, Zip_lat_long, _ = compute_distance2(da, zipcode, Zip_lat_long)
-            combination.append([da,zipcode,distance])
+            combination.append([da,zipcode,distance,assignment])
 
 
 # Iterate through the states
@@ -324,7 +354,10 @@ for da, zipcode, distance in tqdm(combination):
 #        Create an arc only if distance between DA and Zip is less than the Zip's state threshold in this model we only use volume above zero
     if distance< Range[ZipCode_Dict[zipcode]['State']] and ZipCode_Dict[zipcode]['Volume']>0:
         for carrier in DA_ZipCode_Dict[da]['Carrier']:
-            Arcs.setdefault(zipcode,{}).setdefault(da +" "+carrier,{'distance' : distance})
+            if [zipcode, da+' '+carrier] in Assignment_Kept:
+                Arcs.setdefault(zipcode,{}).setdefault(da +" "+carrier,{'distance' : distance, 'Assignment' : 1})
+            else : 
+                Arcs.setdefault(zipcode,{}).setdefault(da +" "+carrier,{'distance' : distance, 'Assignment' : 0})
                 
                 
 # Compute Costs for the arcs
@@ -347,12 +380,15 @@ for pc in Arcs.keys():
             lmcost=flat
         else :
             lmcost=flat+ (distance - breakpoint) * extra
-        if distance > oportunity_threshold : # Oportunity cost
-            lm_oport_cost = lmcost + oportunity_cost
-        else:
-            lm_oport_cost = lmcost
+        lm_oport_cost = lmcost
+        for r in range(len(w_sl)):         
+            if distance > w_sl['Miles_From_DA'] : # Oportunity cost
+                lm_oport_cost = lmcost + w_sl['Oportunity_Cost']
+            else:
+                break          
         Arcs[pc][da]['lm_cost'] = lmcost
         Arcs[pc][da]['lm_oport_cost'] = lm_oport_cost
+
 
 #   { Zip : {DA+Carrier :{distance, lm_cost (come in next step), var(come in two steps)}}
 print("Create Model")
@@ -390,6 +426,29 @@ prob += pulp.lpSum([lmcost(pc,da) for pc in Arcs.keys() for da in Arcs[pc].keys(
 print("Create contraint 'every zipcode is assigned to a DA'")
 for pc in tqdm(Arcs.keys()):          
     prob += pulp.lpSum([Arcs[pc][da]['variable'] for da in Arcs[pc].keys()]) == 1
+
+# Keep certain DAs open
+
+for r in range(len(w_da)):
+    if w_da["Open_DA"][r] == 1:
+        da = w_da['Zip_Code'][r] +" "+ w_da['Carrier'][r]  
+        prob += DAC_ZipCode_Dict[da]['opening_variable'] == 1
+        
+# Keep certain number of current Das
+varlist = []
+for da in Current_DA:
+    try :
+        varlist.append(DAC_ZipCode_Dict[da]['opening_variable'])
+    except:
+        varlist.append(0)
+prob += pulp.lpSum(varlist) >= min_nb_current_da
+        
+        
+# Create Constraint: Keep certain Assignment
+for pc in Arcs.keys():
+    for dac in Arcs[pc].keys():
+        if Arcs[pc][dac]['Assignment'] == 1:
+            prob += Arcs[pc][dac]['variable'] == 1
 
 # Volume only if DA open, limit the max number of Zip
 for da in DAC_ZipCode_Dict.keys():
