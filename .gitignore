@@ -18,3 +18,4 @@
 # Visio autosave temporary files
 *.~vsd*
 *.log
+gurobi.log
