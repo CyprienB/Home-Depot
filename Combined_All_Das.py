@@ -56,7 +56,7 @@ Assign parameters value
 ###############
 ###############
 """
-min_nb_current_da = w_param['Min_Nb_Current_DAs_To_Keep']
+min_nb_current_da = w_param['Min_Nb_Current_Das_To_Keep']
 optimization_time = w_param['Max_Run_Time'][0]
 number_days = w_param['Nb_Days'][0]
 weight_treshold_ltl = w_param['LTL_Flat_Weight'][0]
@@ -115,8 +115,8 @@ Multiple dictionnaries are going to be created to represent DAs and Zipcode beca
 Assignment_Kept = []
 Current_DA= []
 for r in range(len(w_zip)):
-    zipcode = correct_zip(w_zip['Zip#'][r])
-    da = correct_zip(w_zip['DA ZIP'][r])
+    zipcode = correct_zip(str(w_zip['Zip#'][r]))
+    da = correct_zip(str(w_zip['DA ZIP'][r]))
     carrier = w_zip['Carrier'][r]
     if w_zip["Keep_Assignment"][r] == 1:
         Assignment_Kept.append([zipcode, da+' '+carrier])
@@ -286,7 +286,7 @@ for state in tqdm(State_Da_dict.keys()):
         for pc in zip_list:
             zipcode = pc[0]
             distance, Zip_lat_long, _ = compute_distance2(da, zipcode, Zip_lat_long)
-            combination.append([da,zipcode,distance,assignment])
+            combination.append([da,zipcode,distance])
 
 
 # Iterate through the states
@@ -611,12 +611,15 @@ for pc in Arcs0.keys():
             lmcost=flat
         else :
             lmcost=flat+ (distance - breakpoint) * extra
-        if distance > oportunity_threshold : # Oportunity cost
-            lm_oport_cost = lmcost + oportunity_cost
-        else:
-            lm_oport_cost = lmcost
+        lm_oport_cost = lmcost
+        for r in range(len(w_sl)):         
+            if distance > w_sl['Miles_From_DA'] : # Oportunity cost
+                lm_oport_cost = lmcost + w_sl['Oportunity_Cost']
+            else:
+                break          
         Arcs0[pc][da]['lm_cost'] = lmcost
         Arcs0[pc][da]['lm_oport_cost'] = lm_oport_cost
+
 
 #   { Zip : {DA+Carrier :{distance, lm_cost (come in next step), var(come in two steps)}}
 print("Create Model")
@@ -638,6 +641,13 @@ def lmcost2(pc,da):
     return (Arcs0[pc][da]['lm_oport_cost']+0.005*Arcs0[pc][da]['distance'])*Arcs0[pc][da]['variable']
 
 prob += pulp.lpSum([lmcost2(pc,da) for pc in Arcs0.keys() for da in Arcs0[pc].keys()])
+
+        
+# Create Constraint: Keep certain Assignment
+for pc in Arcs0.keys():
+    for dac in Arcs0[pc].keys():
+        if Arcs0[pc][dac]['Assignment'] == 1:
+            prob += Arcs0[pc][dac]['variable'] == 1
 
 # Create Constraint : every Zip is allocated
 print("Create contraint 'every zipcode is assigned to a DA'")

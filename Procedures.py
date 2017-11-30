@@ -242,6 +242,7 @@ def compute_distance2(zip1,zip2,Dict_lat_long, show =0,Minkowski_coef = 1.54):
           
 # This function will return a 5 digit postal code by adding 0 in front if the input is less than 5
 def correct_zip(str_Zip):
+    str_Zip = str(str_Zip)
     if len(str_Zip) == 4:
         zipcode = "0"+str_Zip
     elif len(str_Zip) == 3:
