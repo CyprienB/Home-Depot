@@ -382,8 +382,8 @@ for pc in Arcs.keys():
             lmcost=flat+ (distance - breakpoint) * extra
         lm_oport_cost = lmcost
         for r in range(len(w_sl)):         
-            if distance > w_sl['Miles_From_DA'] : # Oportunity cost
-                lm_oport_cost = lmcost + w_sl['Oportunity_Cost']
+            if distance > w_sl['Miles_From_DA'][r] : # Oportunity cost
+                lm_oport_cost = lmcost + w_sl['Oportunity_Cost'][r]
             else:
                 break          
         Arcs[pc][da]['lm_cost'] = lmcost
@@ -587,9 +587,13 @@ for i in tqdm(range(len(combination))):
 
     if zipcode not in Arcs.keys():
         for carrier in DA_ZipCode_Dict[da]['Carrier']:
-            if da + " " + carrier in Useful_Da:
-                Arcs0.setdefault(zipcode,{}).setdefault(da +" "+carrier,{'distance' : distance})
+            if da + " " + carrier in Useful_Da:   
+                if [zipcode, da+' '+carrier] in Assignment_Kept:
+                    Arcs0.setdefault(zipcode,{}).setdefault(da +" "+carrier,{'distance' : distance, 'Assignment' : 1})
+                else : 
+                    Arcs0.setdefault(zipcode,{}).setdefault(da +" "+carrier,{'distance' : distance, 'Assignment' : 0})
                 
+       
                 
 # Compute Costs for the arcs
 for pc in Arcs0.keys():
@@ -613,8 +617,8 @@ for pc in Arcs0.keys():
             lmcost=flat+ (distance - breakpoint) * extra
         lm_oport_cost = lmcost
         for r in range(len(w_sl)):         
-            if distance > w_sl['Miles_From_DA'] : # Oportunity cost
-                lm_oport_cost = lmcost + w_sl['Oportunity_Cost']
+            if distance > w_sl['Miles_From_DA'][r] : # Oportunity cost
+                lm_oport_cost = lmcost + w_sl['Oportunity_Cost'][r]
             else:
                 break          
         Arcs0[pc][da]['lm_cost'] = lmcost
@@ -815,9 +819,9 @@ print('Current Total Cost :', Current_Total_Cost, ', Optimized Network Total Cos
 print('Savings in percentage :', percentage_savings)
 
 
-df = pd.DataFrame({'Opportunity Cost': [oportunity_cost],'Number of DAs': [len(Useful_Da)], 'Current LM Cost': [Current_LM_Cost],'Current LH Cost': [Current_LH_Cost], 'Optimized LM Cost':[Optimized_LM_Cost], 'Optimized LH Cost':[Optimized_LH_Cost],'Current Total Cost':[Current_Total_Cost], 'Total Optimized Cost':[Total_Optimized_Cost]})
+df = pd.DataFrame({'Number of DAs': [len(Useful_Da)], 'Current LM Cost': [Current_LM_Cost],'Current LH Cost': [Current_LH_Cost], 'Optimized LM Cost':[Optimized_LM_Cost], 'Optimized LH Cost':[Optimized_LH_Cost],'Current Total Cost':[Current_Total_Cost], 'Total Optimized Cost':[Total_Optimized_Cost]})
 # Fix column names
-df = df[['Opportunity Cost','Number of DAs','Current LM Cost','Current LH Cost','Optimized LM Cost','Optimized LH Cost','Current Total Cost','Total Optimized Cost']]
+df = df[['Number of DAs','Current LM Cost','Current LH Cost','Optimized LM Cost','Optimized LH Cost','Current Total Cost','Total Optimized Cost']]
 writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Cost_Output.xlsx', engine='xlsxwriter')
 df.to_excel(writer, sheet_name='Sheet1')
 writer.save()
