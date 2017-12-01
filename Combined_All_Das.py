@@ -35,6 +35,7 @@ Minkowski_coef = 1.54
 ###############
 ###############
 """
+print('***** Importing Excel Files *****')
 
 wb = pd.ExcelFile('C:\HomeDepot_Excel_Files\Standard_File.xlsx')
 wd = pd.ExcelFile('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx')
@@ -56,7 +57,7 @@ Assign parameters value
 ###############
 ###############
 """
-min_nb_current_da = w_param['Min_Nb_Current_Das_To_Keep']
+min_nb_current_da = w_param['Min_Nb_Current_Das_To_Keep'][0]
 optimization_time = w_param['Max_Run_Time'][0]
 number_days = w_param['Nb_Days'][0]
 weight_treshold_ltl = w_param['LTL_Flat_Weight'][0]
@@ -72,7 +73,7 @@ Regression
 ###############
 ###############
 """
-
+print('***** Regression Analysis *****')
 # Parse useful data for regression analysis
 ltl_price = ltl_price[(ltl_price['tot_shp_wt'] >= 200) & (ltl_price['tot_shp_wt'] <= 4999) & (ltl_price['aprv_amt'] <=1000)]
 # Define an interaction term between distance and weight
@@ -110,10 +111,13 @@ Multiple dictionnaries are going to be created to represent DAs and Zipcode beca
 ###############################################################
 ###############################################################
 """
+print ("***** Create all Dictionnaries *****")
 
 # List of assignments we want to keep
 Assignment_Kept = []
 Current_DA= []
+
+
 for r in range(len(w_zip)):
     zipcode = correct_zip(str(w_zip['Zip#'][r]))
     da = correct_zip(str(w_zip['DA ZIP'][r]))
@@ -123,7 +127,7 @@ for r in range(len(w_zip)):
 #    List of current DA
     Current_DA = list(set().union(Current_DA,[da+" "+carrier]))
 
-print ("Create all Dictionnaries")
+
 
 
 # Get length of DA, Zip, latlong, fullfillment centers, zip range
@@ -210,6 +214,19 @@ Range = { w_range['Abreviation'][r] : w_range['Max_Dist_Zip_Da'][r] * Minkowski_
 # Create dictionary with State Destination as a Key and nested dictionary with weight by origin 
 percDestin = averageOrig(ltl_price)
 
+
+print('***** Debugging *****')
+a = 0
+varlist = []
+for da in Current_DA:
+    if da in DAC_ZipCode_Dict.keys():
+        a += 1 
+if a < min_nb_current_da:
+    raise ValueError(' The number of Das we are supposed to keep from current network (%s) is greater than the number of current Das in Da List (%s).' %(str(min_nb_current_da), str(a)))
+
+
+
+
 """
 ###############################################################
 ###############################################################
@@ -222,7 +239,7 @@ This part compute the distance between Das and DFC and the pricing based on para
 ############################################################### 
 """
 # Relation Da_Dfc is in format {da : {state_dfc : {distance, percentage from state}, global : {slope,cost_opening}}
-
+print('***** Compute LH Pricing *****')
 Da_Dfc = {}
 
 Error_state = []
@@ -271,7 +288,7 @@ This part create the combination DA Zipcode based on neighboring states and then
 combination = []
 combinationDA = []
 # Iterate through the states
-print('Creating combination Da Zipcode')
+print('***** Creating combination Da-Zipcode and compute distances*****')
 for state in tqdm(State_Da_dict.keys()):
 #    Create list of Da in the state
     da_list = State_Da_dict[state]
@@ -290,7 +307,7 @@ for state in tqdm(State_Da_dict.keys()):
 
 
 # Iterate through the states
-print('Creating combination Da_Da')
+print('***** Creating combination Da_Da and compute distances *****')
 for state in tqdm(State_DAC_dict.keys()):
 #    Create list of Da in the state
     da_list = State_DAC_dict[state]
@@ -312,7 +329,7 @@ for state in tqdm(State_DAC_dict.keys()):
 
 
 # Update if new zipcodes 
-print("Update Database")
+print("***** Update lat long Database *****")
 ZipList= []
 LatList = []
 LongList = []
@@ -331,7 +348,7 @@ Database = Database[['ZipCode','Latitude','Longitude', 'State']]
 writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx', engine='xlsxwriter')
 Database.to_excel(writer,sheet_name = 'Zip_Lat_Long', index = False)
 writer.save()
-print('Database updated')
+
     
     
   
@@ -347,9 +364,10 @@ and uses all DA(based on previous optimization)
 ###############################################################
 ###############################################################
 """
+print('***** Create Arcs and compute LM Cost for them *****')
 # Create dictionnary for the arcs
 Arcs={}
-for da, zipcode, distance in tqdm(combination):
+for da, zipcode, distance in combination:
 
 #        Create an arc only if distance between DA and Zip is less than the Zip's state threshold in this model we only use volume above zero
     if distance< Range[ZipCode_Dict[zipcode]['State']] and ZipCode_Dict[zipcode]['Volume']>0:
@@ -391,7 +409,7 @@ for pc in Arcs.keys():
 
 
 #   { Zip : {DA+Carrier :{distance, lm_cost (come in next step), var(come in two steps)}}
-print("Create Model")
+print("***** Create Model and variables *****")
 
 # Create Model
 prob = pulp.LpProblem("Minimize HDU Cost",pulp.LpMinimize)
@@ -413,7 +431,7 @@ for da in DAC_ZipCode_Dict.keys():
 
 
 # Create Objective function : minimize cost
-print("Create objective and Constraint")
+print("***** Create objective and Constraints *****")
 def lmcost(pc,da):
     return (Arcs[pc][da]['lm_oport_cost']*ZipCode_Dict[pc]['Volume']+0.01*Arcs[pc][da]['distance'])*Arcs[pc][da]['variable']
 def lhcost(da):
@@ -423,8 +441,8 @@ def lhcost(da):
 prob += pulp.lpSum([lmcost(pc,da) for pc in Arcs.keys() for da in Arcs[pc].keys()]) + nb_trucks*pulp.lpSum([lhcost(da) for da in DAC_ZipCode_Dict.keys()])
 
 # Create Constraint : every Zip is allocated
-print("Create contraint 'every zipcode is assigned to a DA'")
-for pc in tqdm(Arcs.keys()):          
+
+for pc in Arcs.keys():          
     prob += pulp.lpSum([Arcs[pc][da]['variable'] for da in Arcs[pc].keys()]) == 1
 
 # Keep certain DAs open
@@ -435,12 +453,14 @@ for r in range(len(w_da)):
         prob += DAC_ZipCode_Dict[da]['opening_variable'] == 1
         
 # Keep certain number of current Das
+a = 0 
 varlist = []
 for da in Current_DA:
     try :
         varlist.append(DAC_ZipCode_Dict[da]['opening_variable'])
     except:
         varlist.append(0)
+
 prob += pulp.lpSum(varlist) >= min_nb_current_da
         
         
@@ -466,11 +486,6 @@ for da in DAC_ZipCode_Dict.keys():
     prob += DAC_ZipCode_Dict[da]["Weight_variable"] >= 0
     prob += DAC_ZipCode_Dict[da]["Weight_variable"] >= pulp.lpSum([ZipCode_Dict[pc]['Volume']*Arcs[pc][da]['variable'] for pc in Arcs.keys() if da in Arcs[pc]]) / nb_trucks * weight_per_volume -weight_treshold_ltl 
 
-# Open a certain number of DA
-#    
-#prob += pulp.lpSum([DAC_ZipCode_Dict[da]['opening_variable'] for da in DAC_ZipCode_Dict.keys() ])>= 120
-
-
 
 # Constrain distance between das
 
@@ -487,7 +502,7 @@ for line in combinationDA:
  
     
  # The problem is solved using PuLP's choice of Solver
-print("Solve Problem")
+print("***** Solve Problem *****")
 
 solve= pulp.solvers.GUROBI(timeLimit = optimization_time)
 
@@ -497,9 +512,9 @@ solve.actualSolve(prob)
 # The status of the solution is printed to the screen
 print("Status:", pulp.LpStatus[prob.status])
 
+if pulp.LpStatus[prob.status] == 'Infeasible':
+    raise ValueError('With current set of constraints and inputs, the optimization is infeasible. Please adjust parameters in the excel file (Min distance between Das, Number of DAs to keep, Maximum Distance Zipcode-DA)') 
 
-# The optimised objective function value is printed to the screen    
-print ("total cost", pulp.value(prob.objective))
 
 """
 #########################
@@ -507,7 +522,7 @@ Put results into dataframe
 ##########################
 """
 
-print("Exporting Results")
+print("***** Exporting Results *****")
 
 column_names=["ZipCode",
          "Carrier",
@@ -564,12 +579,6 @@ DA_Results = pd.DataFrame(DA_Results,columns = column_names_da)
 print("Number of Useful Das:", len(Useful_Da))
 
 
-#print("Save File")
-#
-#w_result.save("C:\HomeDepot_Excel_Files\Optimized.xlsx")
-         
-
-
 """
 #####################################
 #####################################
@@ -578,6 +587,8 @@ Optimize 0 Volume Postal and leftovers
 #####################################
 """
 #
+
+print('***** Create Arcs for 0 Volume Zipcode *****')
 # Create dictionnary for the arcs
 Arcs0={}
 for i in tqdm(range(len(combination))):
@@ -594,7 +605,7 @@ for i in tqdm(range(len(combination))):
                     Arcs0.setdefault(zipcode,{}).setdefault(da +" "+carrier,{'distance' : distance, 'Assignment' : 0})
                 
        
-                
+print('***** Compute LM Cost for the Arcs *****')     
 # Compute Costs for the arcs
 for pc in Arcs0.keys():
     for da in Arcs0[pc].keys():
@@ -626,7 +637,7 @@ for pc in Arcs0.keys():
 
 
 #   { Zip : {DA+Carrier :{distance, lm_cost (come in next step), var(come in two steps)}}
-print("Create Model")
+print("***** Create Model and variables **********")
 
 # Create Model
 prob = pulp.LpProblem("Minimize LM Cost",pulp.LpMinimize)
@@ -640,7 +651,7 @@ for pc in Arcs0.keys():
             
 
 # Create Objective function : minimize cost
-print("Create objective and Constraint")
+print("***** Create objective and Constraint *****")
 def lmcost2(pc,da):
     return (Arcs0[pc][da]['lm_oport_cost']+0.005*Arcs0[pc][da]['distance'])*Arcs0[pc][da]['variable']
 
@@ -654,12 +665,11 @@ for pc in Arcs0.keys():
             prob += Arcs0[pc][dac]['variable'] == 1
 
 # Create Constraint : every Zip is allocated
-print("Create contraint 'every zipcode is assigned to a DA'")
 for pc in tqdm(Arcs0.keys()):          
     prob += pulp.lpSum([Arcs0[pc][da]['variable'] for da in Arcs0[pc].keys()]) == 1
 
 # The problem is solved using PuLP's choice of Solver
-print("Solve Problem")
+print("***** Solve Problem *****")
 
 solve= pulp.solvers.GUROBI(timeLimit = optimization_time)
 
@@ -671,7 +681,7 @@ Put results into dataframe
 ##########################
 """
 
-print("Exporting Results")
+print("***** Exporting Results *****")
 
 column_names=["ZipCode",
          "Carrier",
@@ -699,27 +709,18 @@ for pc in Arcs0.keys():
                                    Arcs0[pc][da]['variable'].varValue,
                                    Arcs0[pc][da]['distance']])
 Assign_Results = Assign_Results.append(pd.DataFrame(Assign_Results2,columns = column_names), ignore_index=True)
-            
-print("Write Excel")
-writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Optimized_oportunity.xlsx', engine='xlsxwriter')
-Assign_Results.to_excel(writer,'AssignmentResults', index = False)
-DA_Results.to_excel(writer,'OptimizedDA', index = False)
-writer.save()
 
 
 """
 ##############################
 ##############################
-Cost Analysis
+Computing Cost of current Network
 ##############################
 ##############################
 """
 
-Optimized_LM_Cost = Assign_Results['Total Cost'].sum()
-Optimized_LH_Cost = DA_Results['lh cost'].sum()
-Total_Optimized_Cost = Optimized_LH_Cost+Optimized_LM_Cost
 
-
+print('***** Results_ Analysis *****')
 # Computation of LM Cost of Current Network
 New_Column = []
 for r in range(len(w_zip)):
@@ -739,7 +740,7 @@ for r in range(len(w_zip)):
            else :
                lmcost=flat+ (distance - breakpoint) * extra
                
-        else : # If carrier is not in our pricing dictionnary we compute averageof all carrier present
+        else : # If carrier is not in our pricing dictionnary we compute average of all carrier present
             costs = []
             for carrier in Pricing[state].keys():
                 flat = Pricing[state][carrier]['Flat']
@@ -757,8 +758,6 @@ for r in range(len(w_zip)):
         
 w_zip['Estimated_Unit_Cost'] = New_Column
 w_zip['Estimated_LM_Cost'] = w_zip['Estimated_Unit_Cost'] * w_zip['Volume']
-w_zip['Difference'] = w_zip['Estimated_LM_Cost']- w_zip['Cost']
-Current_LM_Cost = w_zip['Estimated_LM_Cost'].sum()
 
 # Computation of LH Cost
 w_lh = w_zip.groupby(['DA ZIP','Carrier'])['Volume'].sum()
@@ -766,37 +765,46 @@ w_lh = w_lh.reset_index()
 w_lh['Weight_per_truck'] = w_lh['Volume']*weight_per_volume/nb_trucks
 
 New_Column = []
-
+Error_state = []
+Error_Da = []
 for r in range(len(w_lh)):
     zipcode = correct_zip(str(w_lh['DA ZIP'][r]))
     state = Zip_lat_long[zipcode][1]
     weight = w_lh['Weight_per_truck'][r]
     try:
         for dfc_state in percDestin[state].keys():
-            
             dfc_zip = DFC_Dict[dfc_state]['Zipcode']
             percentage = percDestin[state][dfc_state]
-            
             distance, Zip_lat_long, _ = compute_distance2(zipcode,dfc_zip,Zip_lat_long)
-            
             slope = coefficient["tot_mile_wt"]+coefficient["tot_mile_wt"]*distance
-            
             intercept = coefficient['Intercept']+coefficient['tot_mile_cnt']*distance
-            
             cost_opening = intercept + weight_treshold_ltl * slope
-            
             Da_Dfc.setdefault(zipcode,{}).setdefault(dfc_state, {"distance":distance, "percentage" : percentage,"slope": slope,"cost_opening": cost_opening})
-
-        slope = sum(Da_Dfc[zipcode][dfc_state]["slope"]*Da_Dfc[zipcode][dfc_state]["percentage"] for dfc_state in Da_Dfc[zipcode].keys())
-        
-        cost_opening = sum(Da_Dfc[zipcode][dfc_state]["cost_opening"]*Da_Dfc[zipcode][dfc_state]["percentage"] for dfc_state in Da_Dfc[zipcode].keys())
-        
+        slope = sum(Da_Dfc[zipcode][dfc_state]["slope"]*Da_Dfc[zipcode][dfc_state]["percentage"] for dfc_state in Da_Dfc[zipcode].keys())       
+        cost_opening = sum(Da_Dfc[zipcode][dfc_state]["cost_opening"]*Da_Dfc[zipcode][dfc_state]["percentage"] for dfc_state in Da_Dfc[zipcode].keys())        
         Da_Dfc[zipcode]['Global']={'slope' : slope, 'cost_opening' : cost_opening}
         
     except KeyError:
-#        Just assume we take the previous cost
-        Da_Dfc.setdefault(zipcode,{}).setdefault('Global',{'slope' : 0.1, 'cost_opening' : 70, 'Warning':"This Da doesn't have real slope or cost of opening"}  )  
-    
+        Error_state = list(set().union(Error_state,[da_state]))  
+        Error_Da.append([da_state,zipcode])
+
+for da_state in Error_state:
+    neigh_states = neig_states(da_state, w_neig)
+    neigh_das = []
+    for state in neigh_states: 
+        if state not in Error_state : 
+            neigh_das += State_Da_dict[state]
+    for state, da in Error_Da:
+        if state == da_state:
+            Da_Dfc.setdefault(da,{}).setdefault('Global', {})
+            slope = np.mean([Da_Dfc[nda]['Global']['slope'] for nda in neigh_das])
+            cost_opening = np.mean([Da_Dfc[nda]['Global']['cost_opening'] for nda in neigh_das])
+            Da_Dfc[da]['Global']={'slope' : slope, 'cost_opening' : cost_opening}  
+            
+for r in range(len(w_lh)):
+    zipcode = correct_zip(str(w_lh['DA ZIP'][r]))
+    state = Zip_lat_long[zipcode][1]
+    weight = w_lh['Weight_per_truck'][r]  
     if weight < weight_treshold_ltl:
         lhcost = Da_Dfc[zipcode]['Global']['cost_opening']
     else : 
@@ -807,21 +815,95 @@ for r in range(len(w_lh)):
 
 w_lh['LH Cost'] = New_Column
 
+"""
+##############################
+##############################
+Cost Analysis
+##############################
+##############################
+"""
 
-Current_LH_Cost = w_lh['LH Cost'].sum()
+# Optimized Model Cost
+Optimized_Model_LM_Cost = Assign_Results['Total Cost'].sum()
+Optimized_Model_LH_Cost = DA_Results['lh cost'].sum()
+Total_Model_Optimized_Cost = Optimized_Model_LH_Cost + Optimized_Model_LM_Cost
 
-Current_Total_Cost = Current_LH_Cost + Current_LM_Cost
-percentage_savings = (Current_Total_Cost-Total_Optimized_Cost)/Current_Total_Cost*100
+#Current Model Cost
+Current_Model_LM_Cost = w_zip['Estimated_LM_Cost'].sum()
+Current_Model_LH_Cost = w_lh['LH Cost'].sum()
+Current_Model_Total_Cost = Current_Model_LH_Cost + Current_Model_LM_Cost
+
+#Current Real Cost
+Current_Real_LM_Cost = w_zip['Cost'].sum()
+Current_Real_LH_Cost = ltl_price['aprv_amt'].sum()
+Current_Real_Total_Cost = Current_Real_LH_Cost + Current_Real_LM_Cost
+
+# Optimized Real Cost
+Optimized_Real_LM_Cost = Optimized_Model_LM_Cost * Current_Real_LM_Cost / Current_Model_LM_Cost
+Optimized_Real_LH_Cost = Optimized_Model_LH_Cost * Current_Real_LH_Cost / Current_Model_LH_Cost
+Optimized_Real_Total_Cost = Optimized_Real_LH_Cost + Optimized_Real_LM_Cost
+
+# Savings
+Savings_Total = Current_Real_Total_Cost - Optimized_Real_Total_Cost
+Savings_LM = Current_Real_LM_Cost - Optimized_Real_LM_Cost
+Savings_LH = Current_Real_LH_Cost - Optimized_Real_LH_Cost
+
+# Percentage Savings
+percent_savings_LM = Savings_LM /Current_Real_LM_Cost *100
+percent_savings_LH = Savings_LH /Current_Real_LH_Cost *100
+percent_savings_total = Savings_Total/Current_Real_Total_Cost*100
 print('Number of Das :', len(Useful_Da))
-print('Current LM Cost :', Current_LM_Cost, ', Optimized Network LM Cost :', Optimized_LM_Cost)
-print('Current LH Cost :', Current_LH_Cost, ', Optimized Network LH Cost :', Optimized_LH_Cost)
-print('Current Total Cost :', Current_Total_Cost, ', Optimized Network Total Cost :', Total_Optimized_Cost)
-print('Savings in percentage :', percentage_savings)
+print('Current LM Cost :', Current_Real_LM_Cost, ', Optimized Network LM Cost :', Optimized_Real_LM_Cost)
+print('Current LH Cost :', Current_Real_LH_Cost, ', Optimized Network LH Cost :', Optimized_Real_LH_Cost)
+print('Current Total Cost :', Current_Real_Total_Cost, ', Optimized Network Total Cost :',  Optimized_Real_Total_Cost)
+print('Savings in percentage :', percent_savings_total)
+    
+# Number of DAs Kept
+a=0
+for da in Useful_Da:
+    if da in Current_DA:
+        a +=1
+# Number of Volumes in 1day delivery
+Volume_1_day_Model_Optimized = Assign_Results[Assign_Results['distance']< w_sl['Miles_From_DA'][0]]['Volume'].sum()
+Volume_1_day_Real_Current = w_zip[w_zip['Last Mile Transit Time (Hours)'] == 24]['Volume'].sum()
+Volume_1_day_Model_Current= 0 
+for r in range(len(w_zip)):
+    zip1 = correct_zip(w_zip['Zip#'][r])
+    zip2 = correct_zip(w_zip['DA ZIP'][r])
+    distance, Zip_lat_long, _ = compute_distance2(zip1,zip2,Zip_lat_long)
+    if distance < w_sl['Miles_From_DA'][0]:
+        Volume_1_day_Model_Current += w_zip['Volume'][r]
+        
+Total_Volume_Current = w_zip['Volume'].sum()
+Total_Volume_Optimized = Assign_Results['Volume'].sum()    
+
+percent_1_day_Current_Model = Volume_1_day_Model_Current / Total_Volume_Current 
+percent_1_day_Current_Real = Volume_1_day_Real_Current / Total_Volume_Current 
+percent_1_day_Model_Optimized = Volume_1_day_Model_Optimized / Total_Volume_Optimized
+
+percent_1_day_Real_Optimized = 1- ((1-percent_1_day_Model_Optimized)*(1-percent_1_day_Current_Real))/(1-percent_1_day_Current_Model)
 
 
-df = pd.DataFrame({'Number of DAs': [len(Useful_Da)], 'Current LM Cost': [Current_LM_Cost],'Current LH Cost': [Current_LH_Cost], 'Optimized LM Cost':[Optimized_LM_Cost], 'Optimized LH Cost':[Optimized_LH_Cost],'Current Total Cost':[Current_Total_Cost], 'Total Optimized Cost':[Total_Optimized_Cost]})
+df = pd.DataFrame({'Number of DAs': [len(Useful_Da)],
+                                     'Number of DAs Kept From Previous Network': [a],
+                                     '1_day_delivery_service_level' : [percent_1_day_Real_Optimized],
+                                     'Current LM Cost': [Current_Real_LM_Cost],
+                                     'Current LH Cost': [Current_Real_LH_Cost],
+                                     'Optimized LM Cost':[Optimized_Real_LM_Cost],
+                                     'Optimized LH Cost':[Optimized_Real_LH_Cost],
+                                     'Current Total Cost':[Current_Real_Total_Cost],
+                                     'Total Optimized Cost':[Optimized_Real_Total_Cost],
+                                     'Savings':[Savings_Total],
+                                     'Savings Percentage':[percent_savings_total]})
+
+    
 # Fix column names
-df = df[['Number of DAs','Current LM Cost','Current LH Cost','Optimized LM Cost','Optimized LH Cost','Current Total Cost','Total Optimized Cost']]
-writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Cost_Output.xlsx', engine='xlsxwriter')
-df.to_excel(writer, sheet_name='Sheet1')
+df = df[['Number of DAs','Number of DAs Kept From Previous Network','Current LM Cost','Current LH Cost','Optimized LM Cost','Optimized LH Cost','Current Total Cost','Total Optimized Cost']]
+
+
+print("***** Write Excel *****")
+writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Optimized_oportunity.xlsx', engine='xlsxwriter')
+Assign_Results.to_excel(writer,'AssignmentResults', index = False)
+DA_Results.to_excel(writer,'OptimizedDA', index = False)
+df.to_excel(writer, sheet_name='Result_Analysis')
 writer.save()
