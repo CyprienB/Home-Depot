@@ -75,12 +75,12 @@ Regression
 """
 print('***** Regression Analysis *****')
 # Parse useful data for regression analysis
-ltl_price = ltl_price[(ltl_price['tot_shp_wt'] >= 200) & (ltl_price['tot_shp_wt'] <= 4999) & (ltl_price['aprv_amt'] <=1000)]
+ltl_price_clean = ltl_price[(ltl_price['tot_shp_wt'] >= 200) & (ltl_price['tot_shp_wt'] <= 4999) & (ltl_price['aprv_amt'] <=1000)]
 # Define an interaction term between distance and weight
-ltl_price['tot_mile_wt'] = ltl_price['tot_mile_cnt'] * ltl_price['tot_shp_wt']
+ltl_price_clean['tot_mile_wt'] = ltl_price_clean['tot_mile_cnt'] * ltl_price_clean['tot_shp_wt']
 
 # Fit this regression model with .fit() and show results
-linehaul_model = ols('aprv_amt ~ tot_mile_cnt + tot_shp_wt + + tot_mile_wt', data=ltl_price).fit()
+linehaul_model = ols('aprv_amt ~ tot_mile_cnt + tot_shp_wt + + tot_mile_wt', data=ltl_price_clean).fit()
 
 # Output the result of the regression model
 linehaul_model_summary = linehaul_model.summary()
@@ -785,21 +785,19 @@ for r in range(len(w_lh)):
         Da_Dfc[zipcode]['Global']={'slope' : slope, 'cost_opening' : cost_opening}
         
     except KeyError:
-        Error_state = list(set().union(Error_state,[da_state]))  
-        Error_Da.append([da_state,zipcode])
+        Error_Da.append([state,zipcode])
 
-for da_state in Error_state:
+for da_state, da_zip in Error_Da:
     neigh_states = neig_states(da_state, w_neig)
     neigh_das = []
     for state in neigh_states: 
-        if state not in Error_state : 
+        try:
             neigh_das += State_Da_dict[state]
-    for state, da in Error_Da:
-        if state == da_state:
-            Da_Dfc.setdefault(da,{}).setdefault('Global', {})
-            slope = np.mean([Da_Dfc[nda]['Global']['slope'] for nda in neigh_das])
-            cost_opening = np.mean([Da_Dfc[nda]['Global']['cost_opening'] for nda in neigh_das])
-            Da_Dfc[da]['Global']={'slope' : slope, 'cost_opening' : cost_opening}  
+        except: neigh_das += []
+    Da_Dfc.setdefault(da_zip,{}).setdefault('Global', {})
+    slope = np.mean([Da_Dfc[nda]['Global']['slope'] for nda in neigh_das])
+    cost_opening = np.mean([Da_Dfc[nda]['Global']['cost_opening'] for nda in neigh_das])
+    Da_Dfc[da]['Global']={'slope' : slope, 'cost_opening' : cost_opening}  
             
 for r in range(len(w_lh)):
     zipcode = correct_zip(str(w_lh['DA ZIP'][r]))
@@ -898,7 +896,7 @@ df = pd.DataFrame({'Number of DAs': [len(Useful_Da)],
 
     
 # Fix column names
-df = df[['Number of DAs','Number of DAs Kept From Previous Network','Current LM Cost','Current LH Cost','Optimized LM Cost','Optimized LH Cost','Current Total Cost','Total Optimized Cost']]
+df = df[['Number of DAs','Number of DAs Kept From Previous Network','1_day_delivery_service_level','Current LM Cost','Current LH Cost','Optimized LM Cost','Optimized LH Cost','Current Total Cost','Total Optimized Cost']]
 
 
 print("***** Write Excel *****")
