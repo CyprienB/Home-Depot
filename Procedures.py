@@ -195,7 +195,7 @@ def neig_states(state_code, Sheet):
         if Sheet['StateCode'][r] == state_code:
             List.append(Sheet['NeighborStateCode'][r])
             
-        if Sheet['NeighborStateCode'][r] == state_code and Sheet['Neighboring degree'][r] == "1st":
+        if Sheet['NeighborStateCode'][r] == state_code and Sheet['Neighboring Degree'][r] == "1st":
             List.append(Sheet['StateCode'][r])
     return List
     

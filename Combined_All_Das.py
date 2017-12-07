@@ -39,16 +39,18 @@ print('***** Importing Excel Files *****')
 
 wb = pd.ExcelFile('C:\HomeDepot_Excel_Files\Standard_File.xlsx')
 wd = pd.ExcelFile('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx')
-w_neig = wb.parse('List_of_Neighboring_States')
+w_neig = wb.parse('NS_List')
 w_da = wb.parse('DA_List')
-w_zip = wb.parse('Zip_Allocation_and_Pricing')
-w_range = wb.parse("Zip_Range")
-w_dfc = wb.parse("DFC list")
+w_zip = wb.parse('ZIP_Allocation')
+w_range = wb.parse("ZIP_Range")
+w_dfc = wb.parse("DFC_List")
 wslatlong = wd.parse('Zip_Lat_Long')
-ltl_price = wb.parse('ltl_price', converters={'dest_zip': str,'orig_zip': str})
-w_param = wb.parse('Optimization_Parameters')
-w_sl = wb.parse('Service_Level')
+ltl_price = wb.parse('LTL_Pricing', converters={'dest_zip': str,'orig_zip': str})
+w_param = wb.parse('OP_Parameters')
+w_sl = wb.parse('SL_Parameters')
 
+wx = xl.load_workbook('C:\HomeDepot_Excel_Files\Standard_File.xlsx')
+w_lm_pricing = wx["LM_Pricing"]
 
 """
 ###############
@@ -122,7 +124,7 @@ for r in range(len(w_zip)):
     zipcode = correct_zip(str(w_zip['Zip#'][r]))
     da = correct_zip(str(w_zip['DA ZIP'][r]))
     carrier = w_zip['Carrier'][r]
-    if w_zip["Keep_Assignment"][r] == 1:
+    if w_zip["Keep Assignment"][r] == 1:
         Assignment_Kept.append([zipcode, da+' '+carrier])
 #    List of current DA
     Current_DA = list(set().union(Current_DA,[da+" "+carrier]))
@@ -201,15 +203,12 @@ for r in range(nbdfc):
     state = w_dfc['DFC State'][r]
     DFC_Dict[state]={'State':state,'Name':name,'Zipcode':zipcode}
 
-# Import LM Pricing again using openxl
-wx = xl.load_workbook('C:\HomeDepot_Excel_Files\Standard_File.xlsx')
-w_lm_pricing = wx["LM_Pricing"]
 
 # Create LM Pricing Dictionnary
 Pricing = get_lm_pricing(w_lm_pricing)
 
 # Get arc max range Dictionnary {State : Max range}
-Range = { w_range['Abreviation'][r] : w_range['Max_Dist_Zip_Da'][r] * Minkowski_coef for r in range(n_range)}
+Range = { w_range['Abreviation'][r] : w_range['DA Zip Distance'][r] * Minkowski_coef for r in range(n_range)}
 
 # Create dictionary with State Destination as a Key and nested dictionary with weight by origin 
 percDestin = averageOrig(ltl_price)
@@ -448,7 +447,7 @@ for pc in Arcs.keys():
 # Keep certain DAs open
 
 for r in range(len(w_da)):
-    if w_da["Open_DA"][r] == 1:
+    if w_da["Keep_Open"][r] == 1:
         da = w_da['Zip_Code'][r] +" "+ w_da['Carrier'][r]  
         prob += DAC_ZipCode_Dict[da]['opening_variable'] == 1
         
@@ -711,6 +710,26 @@ for pc in Arcs0.keys():
 Assign_Results = Assign_Results.append(pd.DataFrame(Assign_Results2,columns = column_names), ignore_index=True)
 
 
+# Fix double assignments by keeping arc with the biggest assignment value
+test = Assign_Results.groupby(['ZipCode'])['Assignment Variable'].max()
+test = test.reset_index()
+Keep = []
+for r in range(len(Assign_Results)):
+    zipcode = Assign_Results['ZipCode'][r]
+    assign = Assign_Results['Assignment Variable'][r]
+    if assign != 1:
+        for line in range(len(test)):
+            if zipcode == test['ZipCode'][line]:
+                if assign == test['Assignment Variable'][line]:
+                    Keep.append(1)
+                else :
+                    Keep.append(0)
+    else :
+        Keep.append(1)
+        
+Assign_Results['Keep'] = Keep
+Assign_Results = Assign_Results[Assign_Results.Keep == 1]
+
 """
 ##############################
 ##############################
@@ -797,7 +816,7 @@ for da_state, da_zip in Error_Da:
     Da_Dfc.setdefault(da_zip,{}).setdefault('Global', {})
     slope = np.mean([Da_Dfc[nda]['Global']['slope'] for nda in neigh_das])
     cost_opening = np.mean([Da_Dfc[nda]['Global']['cost_opening'] for nda in neigh_das])
-    Da_Dfc[da]['Global']={'slope' : slope, 'cost_opening' : cost_opening}  
+    Da_Dfc[da_zip]['Global']={'slope' : slope, 'cost_opening' : cost_opening}  
             
 for r in range(len(w_lh)):
     zipcode = correct_zip(str(w_lh['DA ZIP'][r]))
@@ -832,7 +851,7 @@ Current_Model_LH_Cost = w_lh['LH Cost'].sum()
 Current_Model_Total_Cost = Current_Model_LH_Cost + Current_Model_LM_Cost
 
 #Current Real Cost
-Current_Real_LM_Cost = w_zip['Cost'].sum()
+Current_Real_LM_Cost = (w_zip['Volume']* w_zip['LM Cost']).sum()
 Current_Real_LH_Cost = ltl_price['aprv_amt'].sum()
 Current_Real_Total_Cost = Current_Real_LH_Cost + Current_Real_LM_Cost
 
@@ -898,10 +917,13 @@ df = pd.DataFrame({'Number of DAs': [len(Useful_Da)],
 # Fix column names
 df = df[['Number of DAs','Number of DAs Kept From Previous Network','1_day_delivery_service_level','Current LM Cost','Current LH Cost','Optimized LM Cost','Optimized LH Cost','Current Total Cost','Total Optimized Cost']]
 
+# Bring State 
+Assign_Results['Zip State'] = Assign_Results['ZipCode'].apply(lambda x: Zip_lat_long[x][1] )
+Assign_Results = Assign_Results.sort_values(by = ['ZipCode'])
 
 print("***** Write Excel *****")
 writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Optimized_oportunity.xlsx', engine='xlsxwriter')
 Assign_Results.to_excel(writer,'AssignmentResults', index = False)
 DA_Results.to_excel(writer,'OptimizedDA', index = False)
-df.to_excel(writer, sheet_name='Result_Analysis')
+df.to_excel(writer, sheet_name='Result_Analysis', index = False)
 writer.save()
