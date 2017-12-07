@@ -77,7 +77,7 @@ Regression
 """
 print('***** Regression Analysis *****')
 # Parse useful data for regression analysis
-ltl_price_clean = ltl_price[(ltl_price['tot_shp_wt'] >= 200) & (ltl_price['tot_shp_wt'] <= 4999) & (ltl_price['aprv_amt'] <=1000)]
+ltl_price_clean = ltl_price[(ltl_price['tot_shp_wt'] >= weight_treshold_ltl) & (ltl_price['tot_shp_wt'] <= 4999) & (ltl_price['aprv_amt'] <=1000)]
 # Define an interaction term between distance and weight
 ltl_price_clean['tot_mile_wt'] = ltl_price_clean['tot_mile_cnt'] * ltl_price_clean['tot_shp_wt']
 
@@ -691,7 +691,7 @@ column_names=["ZipCode",
          'Total Cost',
          'Oportunity_cost',
          'Assignment Variable',
-         "distance"]
+         "Distance"]
 # Print Results as DataFrame
 Assign_Results2 = []
 for pc in Arcs0.keys():
@@ -914,13 +914,15 @@ df = pd.DataFrame({'Number of DAs': [len(Useful_Da)],
                                      'Savings Percentage':[percent_savings_total]})
 
     
-# Fix column names
-df = df[['Number of DAs','Number of DAs Kept From Previous Network','1_day_delivery_service_level','Current LM Cost','Current LH Cost','Optimized LM Cost','Optimized LH Cost','Current Total Cost','Total Optimized Cost']]
-
 # Bring State 
 Assign_Results['Zip State'] = Assign_Results['ZipCode'].apply(lambda x: Zip_lat_long[x][1] )
+DA_Results['Da State'] = DA_Results['Da zip'].apply(lambda x: Zip_lat_long[x][1] )
 Assign_Results = Assign_Results.sort_values(by = ['ZipCode'])
 
+# Fix column names
+df = df[['Number of DAs','Number of DAs Kept From Previous Network','1_day_delivery_service_level','Current LM Cost','Current LH Cost','Optimized LM Cost','Optimized LH Cost','Current Total Cost','Total Optimized Cost','Savings','Savings Percentage']]
+Assign_Results = Assign_Results[["ZipCode",'Zip State',"DaZipCode","Carrier",'Volume','Unit Cost','Total Cost',"Distance"]]
+DA_Results = DA_Results[['Da zip','Carrier','lh cost']]
 print("***** Write Excel *****")
 writer = pd.ExcelWriter('C:\HomeDepot_Excel_Files\Optimized_oportunity.xlsx', engine='xlsxwriter')
 Assign_Results.to_excel(writer,'AssignmentResults', index = False)
