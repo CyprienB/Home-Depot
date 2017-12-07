@@ -43,7 +43,7 @@ This part upload the information from the excel spreadsheet
 """
 print('Import Workbook') 
 # Open Worksheet that contains list of DA, List of Zip code with Volume, Pricing spreadsheet,...
-wb = xl.load_workbook('C:\HomeDepot_Excel_Files\Standard_File.xlsx')
+wb = xl.load_workbook('/Users/Edson/Desktop/THD/Excel_Files/Standard_File.xlsx')
 # Open All Different Spreadsheet
 w_neig = wb['List_of_Neighboring_States']
 w_da = wb['DA_List']
@@ -53,12 +53,12 @@ w_range = wb["Zip_Range"]
 w_dfc = wb["DFC list"]
 # Import Database of Zipcode Latitude and Longitude
 print('Open Lat Long Database')
-wdata = xl.load_workbook('C:\HomeDepot_Excel_Files\Zip_latlong.xlsx')
+wdata = xl.load_workbook('/Users/Edson/Desktop/THD/Excel_Files/Zip_latlong.xlsx')
 wslatlong = wdata['Zip']
 
 #Importing Excel sheet as Panda Data Frames to create Dictionary with every destination state as a Key and each Key has a nested Dictionary with the weight (percentage) of invoices coming from every origin for LTL pricing.
 print('Import Database LTL')
-wbLtl = pd.ExcelFile('C:\HomeDepot_Excel_Files\ltl_price.xlsx')
+wbLtl = pd.ExcelFile('/Users/Edson/Desktop/THD/Excel_Files/ltl_price.xlsx')
 ltl_price = wbLtl.parse('ltl_price', converters={'dest_zip': str,'orig_zip': str})
 
 
